@@ -188,3 +188,31 @@ into a simplified Playground credential model.
 ```text
 GET /api/issuers/:issuerId/credentials
 ```
+
+## Step 9 — Pre-Authorized Credential Offer
+
+Date: 2026-10-07
+
+### Built
+
+Implemented the first real OpenID4VCI issuance operation through
+the Inji Certify adapter.
+
+### Flow
+
+```text
+Playground
+    ↓
+Inji Certify Adapter
+    ↓
+POST /v1/certify/pre-authorized-data
+    ↓
+credential_offer_uri
+    ↓
+GET /v1/certify/credential-offer-data/{offer_id}
+    ↓
+OpenID4VCI Credential Offer
+```
+### Playground API's
+POST /api/issuance/pre-authorized-offer
+GET  /api/issuance/offers/:offerId

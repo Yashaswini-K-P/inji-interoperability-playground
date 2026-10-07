@@ -37,6 +37,42 @@ class InjiCertifyAdapter {
       })
     );
   }
+
+async createPreAuthorizedOffer({
+  credentialConfigurationId,
+  claims = {},
+  expiresIn = 600,
+  txCode = "1234"
+}) {
+  const url =
+    `${this.config.baseUrl}/v1/certify/pre-authorized-data`;
+
+  const response = await axios.post(
+    url,
+    {
+      credential_configuration_id: credentialConfigurationId,
+      claims,
+      expires_in: expiresIn,
+      tx_code: txCode
+    },
+    {
+      headers: {
+        "Content-Type": "application/json"
+      }
+    }
+  );
+
+  return response.data;
+}
+
+async getCredentialOffer(offerId) {
+  const url =
+    `${this.config.baseUrl}/v1/certify/credential-offer-data/${offerId}`;
+
+  const response = await axios.get(url);
+
+  return response.data;
+}
 }
 
 module.exports = InjiCertifyAdapter;
