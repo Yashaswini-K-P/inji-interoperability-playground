@@ -114,3 +114,34 @@ Component Configuration
 GET /api/components
 GET /api/components/:type
 GET /api/components/:type/:id
+```
+
+# Phase 3 — Scenario Configuration and Compatibility
+
+## Step 4 — Scenario Model
+
+Date: 2026-10-07
+
+### Built
+
+Created the initial scenario model representing a complete
+interoperability test configuration.
+
+A scenario contains:
+
+- Issuer
+- Credential
+- Credential format
+- Issuance protocol
+- Issuance flow
+- Wallet
+- Verifier
+- Presentation protocol
+
+### API
+
+```text
+POST /api/scenarios
+GET  /api/scenarios
+GET  /api/scenarios/:id
+```
