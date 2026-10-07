@@ -145,3 +145,28 @@ POST /api/scenarios
 GET  /api/scenarios
 GET  /api/scenarios/:id
 ```
+
+# Phase 4 — Inji Certify Integration
+
+## Step 6 — Inji Certify Adapter
+
+Date: 2026-10-07
+
+### Built
+
+Created the first issuer adapter for Inji Certify.
+
+The adapter is responsible for communicating with the configured
+Inji Certify instance.
+
+### Architecture
+
+```text
+Scenario / API
+      ↓
+Issuer Service
+      ↓
+Inji Certify Adapter
+      ↓
+Inji Certify
+```
