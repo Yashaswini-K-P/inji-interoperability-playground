@@ -5,6 +5,7 @@ const componentRoutes = require("./routes/component.routes");
 const scenarioRoutes = require("./routes/scenario.routes");
 const issuerRoutes = require("./routes/issuer.routes");
 const issuanceRoutes = require("./routes/issuance.routes");
+const runRoutes = require("./routes/run.routes");
 
 const app = express();
 
@@ -23,5 +24,6 @@ app.use("/api/components", componentRoutes);
 app.use("/api/scenarios", scenarioRoutes);
 app.use("/api/issuers", issuerRoutes);
 app.use("/api/issuance", issuanceRoutes);
+app.use("/api/runs", runRoutes);
 
 module.exports = app;

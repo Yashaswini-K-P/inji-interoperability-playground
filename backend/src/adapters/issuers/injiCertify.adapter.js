@@ -71,8 +71,44 @@ async getCredentialOffer(offerId) {
 
   const response = await axios.get(url);
 
+  const data = response.data;
+
+  if (data.errors && data.errors.length > 0) {
+    throw new Error(
+      data.errors
+        .map(error => error.errorMessage || error.errorCode)
+        .join("; ")
+    );
+  }
+
+  return data;
+}
+
+async requestToken({
+  preAuthorizedCode,
+  txCode
+}) {
+  const response = await axios.post(
+    `${this.config.baseUrl}/v1/certify/oauth/token`,
+    new URLSearchParams({
+      grant_type:
+        "urn:ietf:params:oauth:grant-type:pre-authorized_code",
+      "pre-authorized_code": preAuthorizedCode,
+      tx_code: txCode
+    }).toString(),
+    {
+      headers: {
+        "Content-Type":
+          "application/x-www-form-urlencoded",
+        Accept: "application/json"
+      }
+    }
+  );
+
   return response.data;
 }
+
+
 }
 
 module.exports = InjiCertifyAdapter;
