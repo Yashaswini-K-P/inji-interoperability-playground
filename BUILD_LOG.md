@@ -76,3 +76,41 @@ backend/
 ├── package.json
 └── server.js
 ```
+
+# Phase 2 — Component Registry
+
+## Step 3 — Configurable Component Registry
+
+Date: 2026-10-07
+
+### Built
+
+Created the initial component registry for:
+
+- Issuers
+- Wallets
+- Verifiers
+
+Initial components:
+
+- Inji Certify
+- Inji Mobile Wallet
+- Inji Web Wallet
+- Inji Verify
+
+Each component contains metadata describing its identity,
+configuration, supported protocols and relevant capabilities.
+
+### Architecture
+
+```text
+API
+ ↓
+Component Registry Service
+ ↓
+Component Configuration
+
+# API's
+GET /api/components
+GET /api/components/:type
+GET /api/components/:type/:id
