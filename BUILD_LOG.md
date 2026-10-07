@@ -36,5 +36,43 @@ inji-interoperability-playground/
 ├── BUILD_LOG.md
 ├── README.md
 └── .gitignore
+```
 
 
+# Phase 1 — Backend Foundation
+
+## Step 2 — Node.js Backend Initialization
+
+Date: 2026-10-07
+
+### Created
+
+- Initialized Node.js backend with npm
+- Added Express
+- Added CORS
+- Added dotenv
+- Added Axios
+- Added Nodemon
+- Created initial backend directory structure
+
+### Backend Structure
+
+```text
+backend/
+├── src/
+│   ├── adapters/
+│   │   ├── issuers/
+│   │   ├── wallets/
+│   │   └── verifiers/
+│   ├── config/
+│   ├── controllers/
+│   ├── engine/
+│   ├── logger/
+│   ├── routes/
+│   ├── services/
+│   └── app.js
+├── .env
+├── .env.example
+├── package.json
+└── server.js
+```
