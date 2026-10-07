@@ -170,3 +170,21 @@ Inji Certify Adapter
       ↓
 Inji Certify
 ```
+
+## Step 7 — Dynamic Credential Discovery
+
+Date: 2026-10-07
+
+### Built
+
+Added credential discovery through the Inji Certify issuer adapter.
+
+The Playground now retrieves the issuer's live OpenID4VCI
+metadata and converts `credential_configurations_supported`
+into a simplified Playground credential model.
+
+### API
+
+```text
+GET /api/issuers/:issuerId/credentials
+```

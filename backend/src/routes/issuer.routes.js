@@ -28,4 +28,32 @@ router.get("/:issuerId/metadata", async (req, res) => {
   }
 });
 
+router.get("/:issuerId/credentials", async (req, res) => {
+  try {
+    const {
+      getIssuerCredentials
+    } = require("../services/issuer.service");
+
+    const credentials =
+      await getIssuerCredentials(req.params.issuerId);
+
+    res.json({
+      success: true,
+      issuer: req.params.issuerId,
+      credentials
+    });
+  } catch (error) {
+    console.error(
+      "Issuer credential discovery error:",
+      error.message
+    );
+
+    res.status(502).json({
+      success: false,
+      error: "Failed to retrieve issuer credentials",
+      details: error.message
+    });
+  }
+});
+
 module.exports = router;

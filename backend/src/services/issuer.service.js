@@ -3,6 +3,7 @@ const {
 } = require("./componentRegistry.service");
 
 const InjiCertifyAdapter = require("../adapters/issuers/injiCertify.adapter");
+const issuanceFlows = require("../config/issuanceFlows");
 
 function getIssuerAdapter(issuerId) {
   const issuer = getComponentById("issuers", issuerId);
@@ -22,6 +23,18 @@ function getIssuerAdapter(issuerId) {
   }
 }
 
+async function getIssuerCredentials(issuerId) {
+  const adapter = getIssuerAdapter(issuerId);
+
+  const credentials = await adapter.getCredentials();
+
+  return credentials.map((credential) => ({
+    ...credential,
+    issuanceFlows: Object.values(issuanceFlows)
+  }));
+}
+
 module.exports = {
-  getIssuerAdapter
+  getIssuerAdapter,
+  getIssuerCredentials
 };
