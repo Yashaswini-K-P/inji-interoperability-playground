@@ -146,16 +146,14 @@ router.post(
         });
       }
 
-       const offer = await createPreAuthorizedOffer(
-      issuerId,
-      {
-        credentialConfigurationId,
-        claims: req.body.claims || {},
-        expiresIn: req.body.expiresIn || 600,
-        txCode: req.body.txCode || "1234"
-      }
-    );
-    
+   const offerUri = result.offer.credential_offer_uri;
+
+setRunOffer(req.params.runId, {
+  credentialOfferUri: offerUri,
+  type: "openid-credential-offer"
+});
+
+
       res.status(201).json({
         success: true,
         offer: result.offer,

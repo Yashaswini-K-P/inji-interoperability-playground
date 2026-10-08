@@ -14,7 +14,8 @@ function createRun(config) {
       issuer: config.issuer,
       credential: config.credential,
       format: config.format,
-      issuanceFlow: config.issuanceFlow
+      issuanceFlow: config.issuanceFlow,
+      wallet: config.wallet
     },
 
     exchanges: [],

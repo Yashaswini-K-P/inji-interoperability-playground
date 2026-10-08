@@ -3,14 +3,27 @@ class InjiMobileAdapter {
     this.config = config;
   }
 
-  async createProof({
-    cNonce,
-    credentialIssuer,
-    algorithm = "RS256"
-  }) {
-    throw new Error(
-      "Inji Mobile proof generation is not implemented yet"
-    );
+  getInfo() {
+    return {
+      id: this.config.id,
+      name: this.config.name,
+      platforms: this.config.platforms,
+      protocols: this.config.protocols
+    };
+  }
+
+  createCredentialOfferContinuation(credentialOfferUri) {
+    if (!credentialOfferUri) {
+      throw new Error("credentialOfferUri is required");
+    }
+
+    return {
+      walletId: this.config.id,
+      wallet: this.config.name,
+      protocol: "openid4vci",
+      credentialOfferUri,
+      type: "openid-credential-offer"
+    };
   }
 }
 

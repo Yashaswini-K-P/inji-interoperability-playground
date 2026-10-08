@@ -22,6 +22,25 @@ function getWalletAdapter(walletId) {
   }
 }
 
+function getWalletInfo(walletId) {
+  const adapter = getWalletAdapter(walletId);
+
+  return adapter.getInfo();
+}
+
+function createWalletContinuation(
+  walletId,
+  credentialOfferUri
+) {
+  const adapter = getWalletAdapter(walletId);
+
+  return adapter.createCredentialOfferContinuation(
+    credentialOfferUri
+  );
+}
+
 module.exports = {
-  getWalletAdapter
+  getWalletAdapter,
+  getWalletInfo,
+  createWalletContinuation
 };

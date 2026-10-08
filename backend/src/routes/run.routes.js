@@ -11,13 +11,14 @@ const router = express.Router();
 router.post("/", (req, res) => {
   try {
     const {
-      issuer,
-      credential,
-      format,
-      issuanceFlow
-    } = req.body;
+  issuer,
+  credential,
+  format,
+  issuanceFlow,
+  wallet
+} = req.body;
 
-    if (!issuer || !credential || !issuanceFlow) {
+    if (!issuer || !credential || !issuanceFlow || !wallet) {
       return res.status(400).json({
         success: false,
         error:
@@ -29,7 +30,8 @@ router.post("/", (req, res) => {
       issuer,
       credential,
       format,
-      issuanceFlow
+      issuanceFlow, 
+      wallet
     });
 
     res.status(201).json({
