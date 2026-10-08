@@ -25,6 +25,38 @@ class InjiMobileAdapter {
       type: "openid-credential-offer"
     };
   }
+
+  async createCredentialRequest({
+    accessToken,
+    cNonce,
+    credentialIssuer,
+    credentialConfiguration
+  }) {
+    if (!accessToken) {
+      throw new Error("accessToken is required");
+    }
+
+    if (!cNonce) {
+      throw new Error("cNonce is required");
+    }
+
+    if (!credentialIssuer) {
+      throw new Error("credentialIssuer is required");
+    }
+
+    if (!credentialConfiguration) {
+      throw new Error("credentialConfiguration is required");
+    }
+
+    return {
+      format: credentialConfiguration.format,
+      credentialConfigurationId:
+        credentialConfiguration.id,
+      credentialIssuer,
+      cNonce,
+      accessToken
+    };
+  }
 }
 
 module.exports = InjiMobileAdapter;

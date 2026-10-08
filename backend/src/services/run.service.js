@@ -19,7 +19,8 @@ function createRun(config) {
     },
 
     exchanges: [],
-    offer: null
+    offer: null,
+    token: null
   };
 
   runs.set(runId, run);
@@ -61,6 +62,19 @@ function setRunOffer(runId, offer) {
   return run;
 }
 
+function setRunToken(runId, token) {
+  const run = runs.get(runId);
+
+  if (!run) {
+    throw new Error(`Run not found: ${runId}`);
+  }
+
+  run.token = token;
+
+  return run;
+}
+
+
 
 function updateRunStatus(runId, status) {
   const run = runs.get(runId);
@@ -79,5 +93,6 @@ module.exports = {
   getRun,
   addExchange,
   updateRunStatus,
-  setRunOffer
+  setRunOffer,
+  setRunToken
 };

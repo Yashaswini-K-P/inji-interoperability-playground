@@ -38,68 +38,94 @@ class InjiCertifyAdapter {
     );
   }
 
-async createPreAuthorizedOffer({
-  credentialConfigurationId,
-  claims = {},
-  expiresIn = 600,
-  txCode = "1234"
-}) {
-  const url =
-    `${this.config.baseUrl}/v1/certify/pre-authorized-data`;
+  async createPreAuthorizedOffer({
+    credentialConfigurationId,
+    claims = {},
+    expiresIn = 600,
+    txCode = "1234"
+  }) {
+    const url =
+      `${this.config.baseUrl}/v1/certify/pre-authorized-data`;
 
+    const response = await axios.post(
+      url,
+      {
+        credential_configuration_id: credentialConfigurationId,
+        claims,
+        expires_in: expiresIn,
+        tx_code: txCode
+      },
+      {
+        headers: {
+          "Content-Type": "application/json"
+        }
+      }
+    );
+
+    return response.data;
+  }
+
+  async getCredentialOffer(offerId) {
+    const url =
+      `${this.config.baseUrl}/v1/certify/credential-offer-data/${offerId}`;
+
+    const response = await axios.get(url);
+
+    const data = response.data;
+
+    if (data.errors && data.errors.length > 0) {
+      throw new Error(
+        data.errors
+          .map(error => error.errorMessage || error.errorCode)
+          .join("; ")
+      );
+    }
+
+    return data;
+  }
+
+  async requestToken({
+    preAuthorizedCode,
+    txCode
+  }) {
+    const response = await axios.post(
+      `${this.config.baseUrl}/v1/certify/oauth/token`,
+      new URLSearchParams({
+        grant_type:
+          "urn:ietf:params:oauth:grant-type:pre-authorized_code",
+        "pre-authorized_code": preAuthorizedCode,
+        tx_code: txCode
+      }).toString(),
+      {
+        headers: {
+          "Content-Type":
+            "application/x-www-form-urlencoded",
+          Accept: "application/json"
+        }
+      }
+    );
+
+    return response.data;
+  }
+
+  // ADD THIS METHOD ONLY
+  async requestCredential({
+  accessToken,
+  format,
+  credentialDefinition,
+  proof
+}) {
   const response = await axios.post(
-    url,
+    `${this.config.baseUrl}/v1/certify/issuance/credential`,
     {
-      credential_configuration_id: credentialConfigurationId,
-      claims,
-      expires_in: expiresIn,
-      tx_code: txCode
+      format,
+      credential_definition: credentialDefinition,
+      proof
     },
     {
       headers: {
-        "Content-Type": "application/json"
-      }
-    }
-  );
-
-  return response.data;
-}
-
-async getCredentialOffer(offerId) {
-  const url =
-    `${this.config.baseUrl}/v1/certify/credential-offer-data/${offerId}`;
-
-  const response = await axios.get(url);
-
-  const data = response.data;
-
-  if (data.errors && data.errors.length > 0) {
-    throw new Error(
-      data.errors
-        .map(error => error.errorMessage || error.errorCode)
-        .join("; ")
-    );
-  }
-
-  return data;
-}
-
-async requestToken({
-  preAuthorizedCode,
-  txCode
-}) {
-  const response = await axios.post(
-    `${this.config.baseUrl}/v1/certify/oauth/token`,
-    new URLSearchParams({
-      grant_type:
-        "urn:ietf:params:oauth:grant-type:pre-authorized_code",
-      "pre-authorized_code": preAuthorizedCode,
-      tx_code: txCode
-    }).toString(),
-    {
-      headers: {
-        "Content-Type":
-          "application/x-www-form-urlencoded",
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
         Accept: "application/json"
       }
     }
@@ -107,8 +133,6 @@ async requestToken({
 
   return response.data;
 }
-
-
 }
 
 module.exports = InjiCertifyAdapter;
