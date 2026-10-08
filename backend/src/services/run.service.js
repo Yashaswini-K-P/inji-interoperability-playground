@@ -17,7 +17,8 @@ function createRun(config) {
       issuanceFlow: config.issuanceFlow
     },
 
-    exchanges: []
+    exchanges: [],
+    offer: null
   };
 
   runs.set(runId, run);
@@ -47,6 +48,19 @@ function addExchange(runId, exchange) {
   return recordedExchange;
 }
 
+function setRunOffer(runId, offer) {
+  const run = runs.get(runId);
+
+  if (!run) {
+    throw new Error(`Run not found: ${runId}`);
+  }
+
+  run.offer = offer;
+
+  return run;
+}
+
+
 function updateRunStatus(runId, status) {
   const run = runs.get(runId);
 
@@ -63,5 +77,6 @@ module.exports = {
   createRun,
   getRun,
   addExchange,
-  updateRunStatus
+  updateRunStatus,
+  setRunOffer
 };

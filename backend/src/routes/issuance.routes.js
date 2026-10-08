@@ -9,7 +9,8 @@ const {
 
 const {
   addExchange,
-  getRun
+  getRun,
+  setRunOffer
 } = require("../services/run.service");
 
 
@@ -145,6 +146,16 @@ router.post(
         });
       }
 
+       const offer = await createPreAuthorizedOffer(
+      issuerId,
+      {
+        credentialConfigurationId,
+        claims: req.body.claims || {},
+        expiresIn: req.body.expiresIn || 600,
+        txCode: req.body.txCode || "1234"
+      }
+    );
+    
       res.status(201).json({
         success: true,
         offer: result.offer,
