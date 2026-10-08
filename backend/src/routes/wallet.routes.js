@@ -11,7 +11,7 @@ const {
 
 const router = express.Router();
 
-router.get("/runs/:runId/continue", async (req, res) => {
+router.get("/runs/:runId/continue", (req, res) => {
   const startTime = Date.now();
 
   try {
@@ -33,17 +33,21 @@ router.get("/runs/:runId/continue", async (req, res) => {
       });
     }
 
-    if (!run.offer?.credentialOfferUri) {
+    const credentialOfferUri =
+      run.offer?.credentialOfferUri;
+
+    if (!credentialOfferUri) {
       return res.status(400).json({
         success: false,
         error: "Credential offer not available for this run"
       });
     }
 
-    const continuation = createWalletContinuation(
-      walletId,
-      run.offer.credentialOfferUri
-    );
+    const continuation =
+      createWalletContinuation(
+        walletId,
+        credentialOfferUri
+      );
 
     const durationMs = Date.now() - startTime;
 
@@ -67,23 +71,30 @@ router.get("/runs/:runId/continue", async (req, res) => {
   } catch (error) {
     const durationMs = Date.now() - startTime;
 
-    const exchange = addExchange(
-      req.params.runId,
-      {
-        stepName: "Wallet Continuation",
-        protocol: "OpenID4VCI",
-        direction: "playground-to-wallet",
-        status: "FAILED",
-        durationMs,
-        error: error.message
-      }
-    );
+    try {
+      const exchange = addExchange(
+        req.params.runId,
+        {
+          stepName: "Wallet Continuation",
+          protocol: "OpenID4VCI",
+          direction: "playground-to-wallet",
+          status: "FAILED",
+          durationMs,
+          error: error.message
+        }
+      );
 
-    res.status(502).json({
-      success: false,
-      error: "Wallet continuation failed",
-      exchange
-    });
+      res.status(502).json({
+        success: false,
+        error: "Wallet continuation failed",
+        exchange
+      });
+    } catch (runError) {
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
   }
 });
 
