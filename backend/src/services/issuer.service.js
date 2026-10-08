@@ -33,8 +33,30 @@ async function getIssuerCredentials(issuerId) {
     issuanceFlows: Object.values(issuanceFlows)
   }));
 }
+async function getCredentialConfiguration(
+  issuerId,
+  credentialConfigurationId
+) {
+  const adapter = getIssuerAdapter(issuerId);
+
+  const credentials = await adapter.getCredentials();
+
+  const credential = credentials.find(
+    (item) => item.id === credentialConfigurationId
+  );
+
+  if (!credential) {
+    throw new Error(
+      `Credential configuration not found: ${credentialConfigurationId}`
+    );
+  }
+
+  return credential;
+}
+
 
 module.exports = {
   getIssuerAdapter,
-  getIssuerCredentials
+  getIssuerCredentials,
+  getCredentialConfiguration
 };

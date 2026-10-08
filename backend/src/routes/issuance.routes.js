@@ -10,8 +10,13 @@ const {
 const {
   addExchange,
   getRun,
-  setRunOffer
+  setRunOffer,
+  setRunToken
 } = require("../services/run.service");
+
+const {
+  createCredentialRequest
+} = require("../services/wallet.service");
 
 
 const router = express.Router();
@@ -298,6 +303,10 @@ router.post(
           txCode
         }
       );
+      setRunToken(
+  req.params.runId,
+  token
+);
 
       const durationMs = Date.now() - startTime;
 

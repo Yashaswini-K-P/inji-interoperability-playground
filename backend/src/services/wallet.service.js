@@ -39,8 +39,18 @@ function createWalletContinuation(
   );
 }
 
+async function createCredentialRequest(
+  walletId,
+  data
+) {
+  const adapter = getWalletAdapter(walletId);
+
+  return adapter.createCredentialRequest(data);
+}
+
 module.exports = {
   getWalletAdapter,
   getWalletInfo,
-  createWalletContinuation
+  createWalletContinuation,
+  createCredentialRequest
 };
