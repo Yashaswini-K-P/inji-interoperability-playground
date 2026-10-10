@@ -36,6 +36,7 @@ const components = {
       type: "verifier",
       version: "0.18.2",
       baseUrl: process.env.INJI_VERIFY_URL,
+      clientId: process.env.INJI_VERIFY_CLIENT_ID?.trim(),
       protocols: ["openid4vp"]
     }
   ]

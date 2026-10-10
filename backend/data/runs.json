@@ -1,0 +1,240 @@
+{
+  "RUN-CFAA97": {
+    "runId": "RUN-CFAA97",
+    "status": "IN_PROGRESS",
+    "createdAt": "2026-10-08T16:17:11.949Z",
+    "scenario": {
+      "issuer": "inji-certify",
+      "credential": "FarmerCredential",
+      "format": "ldp_vc",
+      "issuanceFlow": "pre-authorized",
+      "wallet": "inji-mobile"
+    },
+    "exchanges": [],
+    "offer": null,
+    "token": null
+  },
+  "RUN-25D2FC": {
+    "runId": "RUN-25D2FC",
+    "status": "IN_PROGRESS",
+    "createdAt": "2026-10-08T16:18:48.042Z",
+    "scenario": {
+      "issuer": "inji-certify",
+      "credential": "FarmerCredential",
+      "format": "ldp_vc",
+      "issuanceFlow": "pre-authorized",
+      "wallet": "inji-mobile"
+    },
+    "exchanges": [
+      {
+        "step": 1,
+        "timestamp": "2026-10-08T16:20:48.949Z",
+        "stepName": "Pre-Authorized Data",
+        "protocol": "OpenID4VCI",
+        "direction": "playground-to-issuer",
+        "status": "SUCCESS",
+        "durationMs": 124,
+        "error": null
+      },
+      {
+        "step": 2,
+        "timestamp": "2026-10-08T16:21:30.785Z",
+        "stepName": "Credential Offer",
+        "protocol": "OpenID4VCI",
+        "direction": "playground-to-issuer",
+        "status": "SUCCESS",
+        "durationMs": 89,
+        "error": null
+      },
+      {
+        "step": 3,
+        "timestamp": "2026-10-08T16:22:05.766Z",
+        "stepName": "Token Request",
+        "protocol": "OpenID4VCI",
+        "direction": "playground-to-issuer",
+        "status": "SUCCESS",
+        "durationMs": 187,
+        "error": null
+      },
+      {
+        "step": 4,
+        "timestamp": "2026-10-08T16:22:27.562Z",
+        "stepName": "Credential Request",
+        "protocol": "OpenID4VCI",
+        "direction": "wallet-to-issuer",
+        "status": "FAILED",
+        "durationMs": 296,
+        "error": "createCredentialRequest is not a function"
+      },
+      {
+        "step": 5,
+        "timestamp": "2026-10-08T16:23:59.705Z",
+        "stepName": "Credential Request",
+        "protocol": "OpenID4VCI",
+        "direction": "wallet-to-issuer",
+        "status": "FAILED",
+        "durationMs": 226,
+        "error": "adapter.createCredentialRequest is not a function"
+      }
+    ],
+    "offer": {
+      "credentialOfferUri": "openid-credential-offer://?credential_offer_uri=http%3A%2F%2Fcertify-nginx%3A80%2Fv1%2Fcertify%2Fcredential-offer-data%2Fdfc156a9-aec4-4990-939f-3f54728b52da",
+      "type": "openid-credential-offer"
+    },
+    "token": {
+      "access_token": "eyJiNjQiOmZhbHNlLCJjcml0IjpbImI2NCJdLCJraWQiOiItd3hBUUYzdDBfXzNpeGlIdGNpZU9XdFFMRWFGcWZrUVRscjQzWnlucnlJIiwiYWxnIjoiUlMyNTYifQ.eyJzdWIiOiJ7fSIsImF1ZCI6Imh0dHA6Ly9jZXJ0aWZ5LW5naW54OjgwL3YxL2NlcnRpZnkvaXNzdWFuY2UvY3JlZGVudGlhbCIsImNfbm9uY2VfZXhwaXJlc19pbiI6NDAsImNfbm9uY2UiOiI0YzRjYjQwNC1mMzI2LTRlNTQtYmU4Mi0yYTY1YTdhNWQ2MzQiLCJzY29wZSI6Im1vY2tfaWRlbnRpdHlfdmNfbGRwIiwiaXNzIjoiaHR0cHM6Ly9lc2lnbmV0LW1vY2suY29sbGFiLm1vc2lwLm5ldCIsImV4cCI6MTc5MTQ3NzEyNSwiaWF0IjoxNzkxNDc2NTI1LCJjbGllbnRfaWQiOiIifQ.Ryb-iZye1kyxkqa4xTlomz4H1y2dRcS93J91bExQdjDyPCd3_YSU4dKsE14OobuVtEtqvrXgzr9XSay_8IX4kDAW6kbQsf5vJa0GuqmitJv6go0S1wHDC0VzP7GgQY5rLb7y_V2fpI6CoUIKxqFlnULq2-h_Deq6YWrzt2CpmG38YYERMVEVuWn73aHiPPc-b6WLsFGoQalOqlqH_V9SQihaZij77Y_lCGlrNJVofqwh8lbma5Q13vHiGAv5RmR1yLUSaHPt2IMMc5MhqHGnF_t-TqHao2OEGYiwFloyqoGuoRp5D58QJwBc-7WIpGnSdStducnPorgPaNELcBQJpA",
+      "token_type": "Bearer",
+      "expires_in": 600,
+      "c_nonce": "4c4cb404-f326-4e54-be82-2a65a7a5d634",
+      "c_nonce_expires_in": 40
+    }
+  },
+  "RUN-B3722D": {
+    "runId": "RUN-B3722D",
+    "status": "IN_PROGRESS",
+    "createdAt": "2026-10-08T16:41:20.332Z",
+    "scenario": {
+      "issuer": "inji-certify",
+      "credential": "FarmerCredential",
+      "format": "ldp_vc",
+      "issuanceFlow": "pre-authorized",
+      "wallet": "inji-mobile",
+      "verifier": "inji-verify",
+      "presentationProtocol": "openid4vp"
+    },
+    "exchanges": [
+      {
+        "step": 1,
+        "timestamp": "2026-10-08T16:44:44.054Z",
+        "stepName": "Presentation Request",
+        "protocol": "openid4vp",
+        "direction": "playground-to-verifier",
+        "status": "FAILED",
+        "durationMs": 55,
+        "error": "connect ECONNREFUSED ::1:8095; connect ECONNREFUSED 127.0.0.1:8095"
+      },
+      {
+        "step": 2,
+        "timestamp": "2026-10-08T16:46:20.512Z",
+        "stepName": "Presentation Request",
+        "protocol": "openid4vp",
+        "direction": "playground-to-verifier",
+        "status": "FAILED",
+        "durationMs": 59,
+        "error": "connect ECONNREFUSED ::1:8095; connect ECONNREFUSED 127.0.0.1:8095"
+      },
+      {
+        "step": 3,
+        "timestamp": "2026-10-08T16:48:21.491Z",
+        "stepName": "Presentation Request",
+        "protocol": "openid4vp",
+        "direction": "playground-to-verifier",
+        "status": "FAILED",
+        "durationMs": 55,
+        "error": "connect ECONNREFUSED ::1:8095; connect ECONNREFUSED 127.0.0.1:8095"
+      },
+      {
+        "step": 4,
+        "timestamp": "2026-10-08T16:50:09.865Z",
+        "stepName": "Presentation Request",
+        "protocol": "openid4vp",
+        "direction": "playground-to-verifier",
+        "status": "FAILED",
+        "durationMs": 61,
+        "error": "connect ECONNREFUSED ::1:8095; connect ECONNREFUSED 127.0.0.1:8095"
+      },
+      {
+        "step": 5,
+        "timestamp": "2026-10-08T16:53:23.297Z",
+        "stepName": "Presentation Request",
+        "protocol": "openid4vp",
+        "direction": "playground-to-verifier",
+        "status": "FAILED",
+        "durationMs": 56,
+        "error": "connect ECONNREFUSED ::1:8095; connect ECONNREFUSED 127.0.0.1:8095"
+      },
+      {
+        "step": 6,
+        "timestamp": "2026-10-08T16:54:46.286Z",
+        "stepName": "Presentation Request",
+        "protocol": "openid4vp",
+        "direction": "playground-to-verifier",
+        "status": "SUCCESS",
+        "durationMs": 142,
+        "error": null
+      }
+    ],
+    "offer": null,
+    "token": null
+  },
+  "RUN-572E81": {
+    "runId": "RUN-572E81",
+    "status": "IN_PROGRESS",
+    "createdAt": "2026-10-10T04:33:50.224Z",
+    "scenario": {
+      "issuer": "inji-certify",
+      "credential": "farmer",
+      "format": "ldp_vc",
+      "issuanceFlow": "pre_authorized_code",
+      "wallet": "inji-mobile",
+      "verifier": "inji-verify",
+      "presentationProtocol": "openid4vp"
+    },
+    "exchanges": [
+      {
+        "step": 1,
+        "timestamp": "2026-10-10T04:34:02.964Z",
+        "stepName": "Presentation Request",
+        "protocol": "openid4vp",
+        "direction": "playground-to-verifier",
+        "status": "SUCCESS",
+        "durationMs": 1630,
+        "error": null
+      },
+      {
+        "step": 2,
+        "timestamp": "2026-10-10T04:34:12.193Z",
+        "stepName": "Wallet Presentation Handoff",
+        "protocol": "openid4vp",
+        "direction": "playground-to-wallet",
+        "status": "READY",
+        "handoffMethod": "cross-device-qr",
+        "durationMs": 0,
+        "error": null
+      }
+    ],
+    "offer": null,
+    "token": null,
+    "presentationRequest": {
+      "verifierId": "inji-verify",
+      "protocol": "openid4vp",
+      "createdAt": "2026-10-10T04:34:02.962Z",
+      "authorizationRequest": {
+        "transactionId": "txn_6cf82957-bf9b-4de0-a24d-0304ce130e60",
+        "requestId": "req_f9441aa3-b546-4fe1-87aa-79dac3b3deb2",
+        "authorizationDetails": {
+          "clientId": "playground",
+          "presentationDefinition": {
+            "id": "farmer-credential-request",
+            "input_descriptors": [
+              {
+                "id": "farmer-credential",
+                "format": {
+                  "ldp_vc": {}
+                }
+              }
+            ]
+          },
+          "nonce": "93863f92e3497d04cae983dd29c9ffb0",
+          "responseUri": "http://localhost:8080/v1/verify/vp-submission/direct-post",
+          "acceptVPWithoutHolderProof": false,
+          "responseCodeValidationRequired": false,
+          "responseType": "vp_token",
+          "responseMode": "direct_post",
+          "issuedAt": 1791606842006
+        },
+        "expiresAt": 1791607142000
+      }
+    }
+  }
+}

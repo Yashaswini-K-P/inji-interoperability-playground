@@ -24,6 +24,8 @@ class InjiCertifyAdapter {
         id,
         format: configuration.format,
         scope: configuration.scope,
+        credentialDefinition:
+      configuration.credential_definition || null,
         bindingMethods:
           configuration.cryptographic_binding_methods_supported || [],
         signingAlgorithms:
@@ -108,13 +110,24 @@ class InjiCertifyAdapter {
     return response.data;
   }
 
-  // ADD THIS METHOD ONLY
   async requestCredential({
   accessToken,
   format,
   credentialDefinition,
   proof
 }) {
+  const tokenParts = accessToken.split(".");
+
+  if (tokenParts.length === 3) {
+    const tokenPayload = JSON.parse(
+      Buffer.from(tokenParts[1], "base64url").toString()
+    );
+
+    console.log("=== ACCESS TOKEN DEBUG ===");
+    console.log(JSON.stringify(tokenPayload, null, 2));
+    console.log("==========================");
+  }
+
   const response = await axios.post(
     `${this.config.baseUrl}/v1/certify/issuance/credential`,
     {

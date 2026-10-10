@@ -7,6 +7,8 @@ const issuerRoutes = require("./routes/issuer.routes");
 const issuanceRoutes = require("./routes/issuance.routes");
 const runRoutes = require("./routes/run.routes");
 const walletRoutes = require("./routes/wallet.routes");
+const verifierRoutes = require("./routes/verifier.routes");
+
 
 const app = express();
 
@@ -27,5 +29,6 @@ app.use("/api/issuers", issuerRoutes);
 app.use("/api/issuance", issuanceRoutes);
 app.use("/api/runs", runRoutes);
 app.use("/api/wallet", walletRoutes);
+app.use("/api/verify", verifierRoutes);
 
 module.exports = app;

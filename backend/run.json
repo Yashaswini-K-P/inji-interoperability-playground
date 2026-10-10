@@ -1,0 +1,7 @@
+﻿{
+  "issuer": "inji-certify",
+  "credential": "FarmerCredential",
+  "format": "ldp_vc",
+  "issuanceFlow": "pre-authorized",
+  "wallet": "inji-mobile"
+}

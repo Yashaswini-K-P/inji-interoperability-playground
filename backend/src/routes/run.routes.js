@@ -15,24 +15,35 @@ router.post("/", (req, res) => {
   credential,
   format,
   issuanceFlow,
-  wallet
+  wallet,
+  verifier,
+  presentationProtocol
 } = req.body;
 
-    if (!issuer || !credential || !issuanceFlow || !wallet) {
+    if (
+  !issuer ||
+  !credential ||
+  !issuanceFlow ||
+  !wallet ||
+  !verifier ||
+  !presentationProtocol
+) {
       return res.status(400).json({
         success: false,
         error:
-          "issuer, credential and issuanceFlow are required"
+  "issuer, credential, issuanceFlow, wallet, verifier and presentationProtocol are required"
       });
     }
 
     const run = createRun({
-      issuer,
-      credential,
-      format,
-      issuanceFlow, 
-      wallet
-    });
+  issuer,
+  credential,
+  format,
+  issuanceFlow,
+  wallet,
+  verifier,
+  presentationProtocol
+});
 
     res.status(201).json({
       success: true,

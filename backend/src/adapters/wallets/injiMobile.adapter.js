@@ -1,3 +1,7 @@
+const {
+  createAuthorizationRequestUri
+} = require("./openid4vpQr");
+
 class InjiMobileAdapter {
   constructor(config) {
     this.config = config;
@@ -22,39 +26,26 @@ class InjiMobileAdapter {
       wallet: this.config.name,
       protocol: "openid4vci",
       credentialOfferUri,
-      type: "openid-credential-offer"
+      type: "openid-credential-offer",
+      status: "READY"
     };
   }
 
-  async createCredentialRequest({
-    accessToken,
-    cNonce,
-    credentialIssuer,
-    credentialConfiguration
-  }) {
-    if (!accessToken) {
-      throw new Error("accessToken is required");
-    }
-
-    if (!cNonce) {
-      throw new Error("cNonce is required");
-    }
-
-    if (!credentialIssuer) {
-      throw new Error("credentialIssuer is required");
-    }
-
-    if (!credentialConfiguration) {
-      throw new Error("credentialConfiguration is required");
-    }
-
+  createPresentationRequestContinuation(
+    verifierResponse,
+    clientId
+  ) {
     return {
-      format: credentialConfiguration.format,
-      credentialConfigurationId:
-        credentialConfiguration.id,
-      credentialIssuer,
-      cNonce,
-      accessToken
+      walletId: this.config.id,
+      wallet: this.config.name,
+      protocol: "openid4vp",
+      handoffMethod: "cross-device-qr",
+      verifierResponse,
+      qrUri: createAuthorizationRequestUri(
+        verifierResponse,
+        clientId
+      ),
+      status: "READY"
     };
   }
 }

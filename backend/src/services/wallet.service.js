@@ -1,4 +1,4 @@
-const {
+﻿const {
   getComponentById
 } = require("./componentRegistry.service");
 
@@ -39,6 +39,19 @@ function createWalletContinuation(
   );
 }
 
+function createPresentationRequestContinuation(
+  walletId,
+  verifierResponse,
+  clientId
+) {
+  const adapter = getWalletAdapter(walletId);
+
+  return adapter.createPresentationRequestContinuation(
+    verifierResponse,
+    clientId
+  );
+}
+
 async function createCredentialRequest(
   walletId,
   data
@@ -52,5 +65,6 @@ module.exports = {
   getWalletAdapter,
   getWalletInfo,
   createWalletContinuation,
+  createPresentationRequestContinuation,
   createCredentialRequest
 };

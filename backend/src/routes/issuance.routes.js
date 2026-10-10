@@ -4,7 +4,8 @@ const {
   createPreAuthorizedOffer,
   getCredentialOffer,
   createPreAuthorizedOfferForRun,
-  requestToken
+  requestToken,
+  requestCredential
 } = require("../services/issuance.service");
 
 const {
@@ -351,6 +352,132 @@ router.post(
   }
 );
 
+router.post(
+  "/runs/:runId/credential",
+  async (req, res) => {
+    const startTime = Date.now();
+
+    try {
+      const run = getRun(req.params.runId);
+
+      if (!run) {
+        return res.status(404).json({
+          success: false,
+          error: "Run not found"
+        });
+      }
+
+      if (!run.token) {
+        return res.status(400).json({
+          success: false,
+          error: "Token request must be completed first"
+        });
+      }
+
+      const issuerId = run.scenario.issuer;
+      const walletId = run.scenario.wallet;
+      const credentialConfigurationId =
+        run.scenario.credential;
+
+      const token = run.token;
+
+      const issuerAdapter =
+        require("../services/issuer.service")
+          .getIssuerAdapter(issuerId);
+
+      const credentials =
+        await issuerAdapter.getCredentials();
+
+      const credentialConfiguration =
+        credentials.find(
+          (credential) =>
+            credential.id === credentialConfigurationId
+        );
+
+      if (!credentialConfiguration) {
+        throw new Error(
+          `Credential configuration not found: ${credentialConfigurationId}`
+        );
+      }
+
+      const metadata =
+        await issuerAdapter.getMetadata();
+
+      const credentialIssuer =
+        metadata.credential_issuer;
+
+      const walletRequest =
+        await createCredentialRequest(
+          walletId,
+          {
+            accessToken: token.access_token,
+            cNonce: token.c_nonce,
+            credentialIssuer,
+            credentialConfiguration
+          }
+        );
+
+      const credentialResponse =
+        await requestCredential(
+          issuerId,
+          {
+            accessToken: walletRequest.accessToken,
+            format:
+              walletRequest.request.format,
+            credentialDefinition:
+              walletRequest.request
+                .credential_definition,
+            proof:
+              walletRequest.request.proof
+          }
+        );
+
+      const durationMs =
+        Date.now() - startTime;
+
+      const exchange = addExchange(
+        req.params.runId,
+        {
+          stepName: "Credential Request",
+          protocol: "OpenID4VCI",
+          direction: "wallet-to-issuer",
+          status: "SUCCESS",
+          durationMs,
+          error: null
+        }
+      );
+
+      res.json({
+        success: true,
+        credential: credentialResponse,
+        exchange
+      });
+    } catch (error) {
+      const durationMs =
+        Date.now() - startTime;
+
+      const exchange = addExchange(
+        req.params.runId,
+        {
+          stepName: "Credential Request",
+          protocol: "OpenID4VCI",
+          direction: "wallet-to-issuer",
+          status: "FAILED",
+          durationMs,
+          error:
+            error.response?.data ||
+            error.message
+        }
+      );
+
+      res.status(502).json({
+        success: false,
+        error: "Credential request failed",
+        exchange
+      });
+    }
+  }
+);
 
 
 module.exports = router;

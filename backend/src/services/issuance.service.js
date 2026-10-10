@@ -86,10 +86,29 @@ async function requestToken(
   });
 }
 
+async function requestCredential(
+  issuerId,
+  {
+    accessToken,
+    format,
+    credentialDefinition,
+    proof
+  }
+) {
+  const adapter = getIssuerAdapter(issuerId);
+
+  return adapter.requestCredential({
+    accessToken,
+    format,
+    credentialDefinition,
+    proof
+  });
+}
 
 module.exports = {
   createPreAuthorizedOffer,
   getCredentialOffer,
   createPreAuthorizedOfferForRun,
-  requestToken
+  requestToken,
+  requestCredential
 };
