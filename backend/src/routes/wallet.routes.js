@@ -66,6 +66,8 @@ router.get("/runs/:runId/continue", (req, res) => {
         status: "READY",
         externalAction: "wallet-scan-not-observed",
         handoffStatus: "PREPARED",
+        handoffMethod: continuation.handoffMethod,
+        actionRequiredCode: "SCAN_CREDENTIAL_OFFER_IN_INJI_MOBILE",
         actionRequired: "Scan the offer with the selected wallet",
         durationMs,
         error: null

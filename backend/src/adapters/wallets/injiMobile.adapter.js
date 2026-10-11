@@ -30,6 +30,8 @@ class InjiMobileAdapter {
       walletId: this.config.id,
       wallet: this.config.name,
       protocol: "openid4vci",
+      handoffMethod: "cross-device-qr",
+      qrPayload: credentialOfferUri,
       credentialOfferUri,
       type: "openid-credential-offer",
       handoffStatus: "PREPARED",

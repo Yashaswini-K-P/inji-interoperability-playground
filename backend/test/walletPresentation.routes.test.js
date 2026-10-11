@@ -193,6 +193,8 @@ test("prepares an offer handoff without claiming wallet scan or credential recei
     return {
       walletId,
       protocol: "openid4vci",
+      handoffMethod: "cross-device-qr",
+      qrPayload: receivedOfferUri,
       credentialOfferUri: receivedOfferUri,
       type: "openid-credential-offer",
       status: "READY"
@@ -206,6 +208,8 @@ test("prepares an offer handoff without claiming wallet scan or credential recei
 
   assert.equal(response.status, 200);
   assert.equal(body.success, true);
+  assert.equal(body.wallet.handoffMethod, "cross-device-qr");
+  assert.equal(body.wallet.qrPayload, offerUri);
   assert.equal(body.wallet.credentialOfferUri, offerUri);
   assert.equal(body.wallet.handoffStatus, "PREPARED");
   assert.equal(body.wallet.status, "READY");
@@ -215,6 +219,11 @@ test("prepares an offer handoff without claiming wallet scan or credential recei
     "wallet-scan-not-observed"
   );
   assert.equal(body.exchange.handoffStatus, "PREPARED");
+  assert.equal(body.exchange.handoffMethod, "cross-device-qr");
+  assert.equal(
+    body.exchange.actionRequiredCode,
+    "SCAN_CREDENTIAL_OFFER_IN_INJI_MOBILE"
+  );
   assert.equal(
     body.exchange.actionRequired,
     "Scan the offer with the selected wallet"

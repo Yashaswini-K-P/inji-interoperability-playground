@@ -142,6 +142,82 @@ The detailed Verify response can contain credential contents, so the
 Playground persists and returns only its transaction ID, aggregate
 result, credential count, and retrieval timestamp.
 
+## Run History API
+
+`GET /api/runs` returns newest-first, safe summaries for the run-history
+view. It does not include offers, authorization request contents, tokens,
+or credential/presentation contents:
+
+```json
+{
+  "success": true,
+  "runs": [
+    {
+      "runId": "RUN-ABC123",
+      "status": "IN_PROGRESS",
+      "result": null,
+      "createdAt": "2026-10-11T08:00:00.000Z",
+      "scenario": {
+        "issuer": "inji-certify",
+        "credential": "FarmerCredential",
+        "wallet": "inji-mobile",
+        "verifier": "inji-verify",
+        "format": "ldp_vc",
+        "issuanceFlow": "pre-authorized",
+        "presentationProtocol": "openid4vp"
+      },
+      "exchangeCount": 2,
+      "latestExchange": {
+        "step": 2,
+        "timestamp": "2026-10-11T08:02:00.000Z",
+        "componentId": "inji-verify",
+        "protocolStep": "Verification Result Retrieval",
+        "status": "PENDING",
+        "error": null,
+        "diagnostic": {
+          "code": "NO_VP_SUBMISSION",
+          "retryable": true
+        }
+      }
+    }
+  ]
+}
+```
+
+Use `GET /api/runs/:runId` for the full persisted run and its exchange
+history. Each exchange recorded by the backend includes server-assigned
+`runId`, `step`, `timestamp`, `componentId`, and `protocolStep`, alongside
+the existing `status`, protocol, direction, errors, and safe diagnostics.
+`componentId` is resolved from the run's configured issuer, wallet, or
+verifier according to the exchange direction. `READY` and `PENDING` remain
+nonterminal; only an authoritative Verify result sets `PASS` or `FAIL`.
+Older persisted exchanges remain readable in their original shape.
+`POST /api/runs/:runId/exchanges` returns `405` with
+`EXCHANGE_WRITE_UNSUPPORTED`; clients cannot author protocol events or
+assert successful wallet/verifier steps. The issuance, wallet, and Verify
+operation routes create their own persisted events.
+
+PowerShell smoke-test requests:
+
+```powershell
+$baseUrl = "http://localhost:5000"
+$history = Invoke-RestMethod -Uri "$baseUrl/api/runs"
+$history.runs | ConvertTo-Json -Depth 8
+
+$runId = $history.runs[0].runId
+Invoke-RestMethod -Uri "$baseUrl/api/runs/$runId" |
+  ConvertTo-Json -Depth 12
+
+Invoke-RestMethod -Uri "$baseUrl/api/verify/runs/$runId/result" |
+  ConvertTo-Json -Depth 12
+```
+
+The final request may return HTTP `202` while Verify has no wallet
+submission yet; that is pending, not a failed or successful presentation.
+Malformed or inconsistent `data/runs.json` now prevents the backend from
+starting with an empty in-memory history, rather than making existing run
+IDs appear missing or allowing a new run to overwrite that history.
+
 ## OpenID4VCI Inji Mobile Handoff
 
 Create and prepare an issuance offer in this order:
@@ -154,6 +230,12 @@ Create and prepare an issuance offer in this order:
 2. `GET /api/wallet/runs/:runId/continue` returns the stored offer URI
    for the selected wallet. Its `READY` status and
    `handoffStatus: "PREPARED"` mean only that the handoff data is ready.
+   `wallet.handoffMethod` is `cross-device-qr`, and `wallet.qrPayload`
+   is the exact Certify offer URI for the frontend to encode as a QR
+   code. The user must open Inji Mobile and scan it; the wallet owns
+   metadata discovery, token exchange, proof generation, credential
+   request, and credential storage. The route records the required scan
+   action but does not claim that the wallet performed it.
    The exchange's `externalAction: "wallet-scan-not-observed"` makes
    explicit that the Playground cannot observe wallet scanning or
    credential storage.
@@ -188,6 +270,17 @@ Inji Mobile wallet by these backend tests. The issuer metadata and
 credential endpoint URLs embedded in the offer must also be reachable
 from the phone; Docker-only hostnames such as `certify-nginx` are not
 mobile-reachable unless the device has a route and DNS for them.
+
+The Inji Wallet credential-offer documentation describes a user scanning
+an issuer-generated QR code and passing the scanned offer URI or offer
+object to its internal `inji-vci-client`; that client performs the
+wallet-side VCI protocol. Its native `requestCredentialByOffer` bridge
+is an app-internal React Native module, not an external backend API or
+documented app-launch callback. The Playground therefore exposes the QR
+payload and does not attempt to invoke that bridge or report a wallet
+callback/credential receipt. The Verify presentation path separately
+returns an `openid4vp://authorize` QR URI; wallet submission and
+verification remain separate, externally performed steps.
 
 Run the focused OpenID4VP tests from the backend directory with:
 

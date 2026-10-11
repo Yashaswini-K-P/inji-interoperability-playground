@@ -25,8 +25,15 @@ const storedRun = {
 
 const runServiceMock = {
   getRun: () => storedRun,
-  createRun: () => storedRun,
-  addExchange: () => ({})
+  listRuns: () => [
+    {
+      runId: storedRun.runId,
+      status: storedRun.status,
+      result: null,
+      exchangeCount: storedRun.exchanges.length
+    }
+  ],
+  createRun: () => storedRun
 };
 
 test.before(async () => {
@@ -52,6 +59,23 @@ test.before(async () => {
     server.once("error", reject);
   });
   baseUrl = `http://127.0.0.1:${server.address().port}`;
+});
+
+test("lists run-history summaries without exposing tokens", async () => {
+  const response = await fetch(`${baseUrl}/api/runs`);
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(body.runs, [
+    {
+      runId: "RUN-SECRET-TEST",
+      status: "IN_PROGRESS",
+      result: null,
+      exchangeCount: 0
+    }
+  ]);
+  assert.equal(JSON.stringify(body).includes("sensitive-access-token"), false);
+  assert.equal(JSON.stringify(body).includes("sensitive-refresh-token"), false);
 });
 
 test.after(async () => {
@@ -86,4 +110,24 @@ test("does not expose the persisted access token in run details", async () => {
     false
   );
   assert.equal(storedRun.token.access_token, "sensitive-access-token");
+});
+
+test("rejects caller-authored exchange events that could fake protocol success", async () => {
+  const response = await fetch(
+    `${baseUrl}/api/runs/RUN-SECRET-TEST/exchanges`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        stepName: "Credential Received",
+        componentId: "inji-mobile",
+        status: "SUCCESS"
+      })
+    }
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 405);
+  assert.equal(body.errorCode, "EXCHANGE_WRITE_UNSUPPORTED");
+  assert.deepEqual(storedRun.exchanges, []);
 });

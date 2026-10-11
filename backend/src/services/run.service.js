@@ -14,14 +14,16 @@ if (!fs.existsSync(runsFile)) {
 }
 
 function loadRuns() {
+  const data = fs.readFileSync(runsFile, "utf8");
+  if (!data.trim()) {
+    throw new Error(
+      `Persisted run history at ${runsFile} is empty; refusing to load an empty history`
+    );
+  }
+
   try {
-    const data = fs.readFileSync(runsFile, "utf8");
-
-    if (!data.trim()) {
-      return new Map();
-    }
-
     const parsed = JSON.parse(data);
+    validatePersistedRuns(parsed);
     let sanitized = false;
 
     for (const run of Object.values(parsed)) {
@@ -29,27 +31,62 @@ function loadRuns() {
     }
 
     if (sanitized) {
-      const temporaryRunsFile = `${runsFile}.${process.pid}.tmp`;
-
-      try {
-        fs.writeFileSync(
-          temporaryRunsFile,
-          JSON.stringify(parsed, null, 2),
-          "utf8"
-        );
-        fs.renameSync(temporaryRunsFile, runsFile);
-      } catch (error) {
-        if (fs.existsSync(temporaryRunsFile)) {
-          fs.unlinkSync(temporaryRunsFile);
-        }
-        throw error;
-      }
+      persistData(parsed);
     }
 
     return new Map(Object.entries(parsed));
   } catch (error) {
-    console.error("Failed to load runs:", error.message);
-    return new Map();
+    if (error instanceof SyntaxError) {
+      throw new Error(
+        `Persisted run history at ${runsFile} is malformed JSON; refusing to load an empty history`
+      );
+    }
+
+    throw error;
+  }
+}
+
+function validatePersistedRuns(parsed) {
+  if (
+    !parsed ||
+    typeof parsed !== "object" ||
+    Array.isArray(parsed)
+  ) {
+    throw new Error(
+      `Persisted run history at ${runsFile} must be an object keyed by run ID`
+    );
+  }
+
+  for (const [runId, run] of Object.entries(parsed)) {
+    if (
+      !run ||
+      typeof run !== "object" ||
+      Array.isArray(run) ||
+      run.runId !== runId ||
+      !Array.isArray(run.exchanges)
+    ) {
+      throw new Error(
+        `Persisted run history at ${runsFile} contains an invalid record for ${runId}`
+      );
+    }
+  }
+}
+
+function persistData(data) {
+  const temporaryRunsFile = `${runsFile}.${process.pid}.tmp`;
+
+  try {
+    fs.writeFileSync(
+      temporaryRunsFile,
+      JSON.stringify(data, null, 2),
+      "utf8"
+    );
+    fs.renameSync(temporaryRunsFile, runsFile);
+  } catch (error) {
+    if (fs.existsSync(temporaryRunsFile)) {
+      fs.unlinkSync(temporaryRunsFile);
+    }
+    throw error;
   }
 }
 
@@ -129,14 +166,21 @@ function sanitizePersistedRun(run) {
 
 const runs = loadRuns();
 
-function saveRuns() {
-  const data = Object.fromEntries(runs);
+function saveRuns(runCollection = runs) {
+  const data = Object.fromEntries(runCollection);
+  persistData(data);
+}
 
-  fs.writeFileSync(
-    runsFile,
-    JSON.stringify(data, null, 2),
-    "utf8"
-  );
+function cloneRun(run) {
+  return JSON.parse(JSON.stringify(run));
+}
+
+function commitRun(runId, updatedRun) {
+  const updatedRuns = new Map(runs);
+  updatedRuns.set(runId, updatedRun);
+  saveRuns(updatedRuns);
+  runs.set(runId, updatedRun);
+  return updatedRun;
 }
 
 function createRun(config) {
@@ -164,14 +208,73 @@ function createRun(config) {
     result: null
   };
 
+  const updatedRuns = new Map(runs);
+  updatedRuns.set(runId, run);
+  saveRuns(updatedRuns);
   runs.set(runId, run);
-  saveRuns();
 
   return run;
 }
 
 function getRun(runId) {
   return runs.get(runId);
+}
+
+function listRuns() {
+  return Array.from(runs.values())
+    .map((run) => {
+      const latestExchange = run.exchanges[run.exchanges.length - 1];
+      const scenario = run.scenario || {};
+
+      return {
+        runId: run.runId,
+        status: run.status,
+        result: run.result || null,
+        createdAt: run.createdAt,
+        scenario: {
+          issuer: scenario.issuer,
+          credential: scenario.credential,
+          wallet: scenario.wallet,
+          verifier: scenario.verifier,
+          format: scenario.format,
+          issuanceFlow: scenario.issuanceFlow,
+          presentationProtocol: scenario.presentationProtocol
+        },
+        exchangeCount: run.exchanges.length,
+        latestExchange: latestExchange
+          ? {
+            step: latestExchange.step,
+            timestamp: latestExchange.timestamp,
+            componentId: latestExchange.componentId,
+            protocolStep: latestExchange.protocolStep,
+            status: latestExchange.status,
+            error: latestExchange.error || null,
+            diagnostic: latestExchange.diagnostic || null
+          }
+          : null
+      };
+    })
+    .sort((left, right) =>
+      Date.parse(right.createdAt) - Date.parse(left.createdAt)
+    );
+}
+
+function getExchangeComponentId(run, exchange) {
+  const direction = exchange.direction || "";
+
+  if (direction.includes("issuer")) {
+    return run.scenario?.issuer || exchange.componentId || "playground";
+  }
+
+  if (direction.includes("wallet")) {
+    return run.scenario?.wallet || exchange.componentId || "playground";
+  }
+
+  if (direction.includes("verifier")) {
+    return run.scenario?.verifier || exchange.componentId || "playground";
+  }
+
+  return exchange.componentId || "playground";
 }
 
 function addExchange(runId, exchange) {
@@ -181,21 +284,24 @@ function addExchange(runId, exchange) {
     throw new Error(`Run not found: ${runId}`);
   }
 
+  const updatedRun = cloneRun(run);
   const recordedExchange = {
-    step: run.exchanges.length + 1,
+    ...exchange,
+    step: updatedRun.exchanges.length + 1,
     timestamp: new Date().toISOString(),
-    ...exchange
+    runId,
+    componentId: getExchangeComponentId(updatedRun, exchange),
+    protocolStep:
+      exchange.protocolStep || exchange.stepName || "Unspecified"
   };
-
   sanitizePersistedRun(recordedExchange);
-  run.exchanges.push(recordedExchange);
+  updatedRun.exchanges.push(recordedExchange);
 
   if (recordedExchange.status === "FAILED") {
-    run.status = "FAILED";
+    updatedRun.status = "FAILED";
   }
 
-  saveRuns();
-
+  commitRun(runId, updatedRun);
   return recordedExchange;
 }
 
@@ -206,11 +312,9 @@ function setRunOffer(runId, offer) {
     throw new Error(`Run not found: ${runId}`);
   }
 
-  run.offer = offer;
-
-  saveRuns();
-
-  return run;
+  const updatedRun = cloneRun(run);
+  updatedRun.offer = offer;
+  return commitRun(runId, updatedRun);
 }
 
 function updateRunStatus(runId, status) {
@@ -220,11 +324,9 @@ function updateRunStatus(runId, status) {
     throw new Error(`Run not found: ${runId}`);
   }
 
-  run.status = status;
-
-  saveRuns();
-
-  return run;
+  const updatedRun = cloneRun(run);
+  updatedRun.status = status;
+  return commitRun(runId, updatedRun);
 }
 
 function setRunPresentationRequest(
@@ -245,7 +347,8 @@ function setRunPresentationRequest(
     throw new Error("presentationRequest is required");
   }
 
-  run.presentationRequest = {
+  const updatedRun = cloneRun(run);
+  updatedRun.presentationRequest = {
     verifierId: run.scenario.verifier,
     protocol: run.scenario.presentationProtocol || "openid4vp",
     createdAt: new Date().toISOString(),
@@ -261,9 +364,7 @@ function setRunPresentationRequest(
     authorizationRequest: presentationRequest
   };
 
-  saveRuns();
-
-  return run;
+  return commitRun(runId, updatedRun);
 }
 
 function setRunVerificationResult(
@@ -285,18 +386,17 @@ function setRunVerificationResult(
     throw new Error("A valid authoritative verification summary is required");
   }
 
-  run.verificationResult = {
+  const updatedRun = cloneRun(run);
+  updatedRun.verificationResult = {
     transactionId,
     allChecksSuccessful,
     credentialCount,
     retrievedAt: new Date().toISOString()
   };
-  run.status = allChecksSuccessful ? "COMPLETED" : "FAILED";
-  run.result = allChecksSuccessful ? "PASS" : "FAIL";
+  updatedRun.status = allChecksSuccessful ? "COMPLETED" : "FAILED";
+  updatedRun.result = allChecksSuccessful ? "PASS" : "FAIL";
 
-  saveRuns();
-
-  return run;
+  return commitRun(runId, updatedRun);
 }
 
 function setRunVerificationFailure(runId, errorCode) {
@@ -310,21 +410,21 @@ function setRunVerificationFailure(runId, errorCode) {
     throw new Error("A verifier failure code is required");
   }
 
-  run.status = "FAILED";
-  run.result = "FAIL";
-  run.verificationFailure = {
+  const updatedRun = cloneRun(run);
+  updatedRun.status = "FAILED";
+  updatedRun.result = "FAIL";
+  updatedRun.verificationFailure = {
     code: errorCode,
     recordedAt: new Date().toISOString()
   };
 
-  saveRuns();
-
-  return run;
+  return commitRun(runId, updatedRun);
 }
 
 module.exports = {
   createRun,
   getRun,
+  listRuns,
   addExchange,
   updateRunStatus,
   setRunOffer,

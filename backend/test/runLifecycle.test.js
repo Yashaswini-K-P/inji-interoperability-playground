@@ -9,6 +9,8 @@ const originalModule = require.cache[servicePath];
 const originalExistsSync = fs.existsSync;
 const originalReadFileSync = fs.readFileSync;
 const originalWriteFileSync = fs.writeFileSync;
+const originalRenameSync = fs.renameSync;
+const temporaryRunsFile = `${runsFile}.${process.pid}.tmp`;
 let persistedRuns;
 
 function isRunsFile(filePath) {
@@ -23,12 +25,19 @@ fs.readFileSync = (filePath, ...args) =>
     ? "{}"
     : originalReadFileSync(filePath, ...args);
 fs.writeFileSync = (filePath, data, ...args) => {
-  if (isRunsFile(filePath)) {
+  if (isRunsFile(filePath) || filePath === temporaryRunsFile) {
     persistedRuns = data;
     return;
   }
 
   return originalWriteFileSync(filePath, data, ...args);
+};
+fs.renameSync = (source, destination) => {
+  if (source === temporaryRunsFile && isRunsFile(destination)) {
+    return;
+  }
+
+  return originalRenameSync(source, destination);
 };
 
 delete require.cache[servicePath];
@@ -38,6 +47,7 @@ test.after(() => {
   fs.existsSync = originalExistsSync;
   fs.readFileSync = originalReadFileSync;
   fs.writeFileSync = originalWriteFileSync;
+  fs.renameSync = originalRenameSync;
 
   if (originalModule) {
     require.cache[servicePath] = originalModule;
@@ -60,10 +70,14 @@ test("keeps prepared wallet handoffs in progress and marks failed steps failed",
   const readyStep = runService.addExchange(run.runId, {
     stepName: "Wallet Handoff",
     protocol: "OpenID4VCI",
+    direction: "playground-to-wallet",
     status: "READY"
   });
 
   assert.equal(readyStep.timestamp.length > 0, true);
+  assert.equal(readyStep.runId, run.runId);
+  assert.equal(readyStep.componentId, "inji-mobile");
+  assert.equal(readyStep.protocolStep, "Wallet Handoff");
   assert.equal(runService.getRun(run.runId).status, "IN_PROGRESS");
   assert.equal(runService.getRun(run.runId).exchanges.length, 1);
 
@@ -117,6 +131,43 @@ test("stores only the authoritative verification summary and sets the terminal P
     resultRun.verificationResult,
     JSON.parse(persistedRuns)[run.runId].verificationResult
   );
+});
+
+test("records verifier failures with a safe diagnostic and component identity", () => {
+  const run = runService.createRun({
+    issuer: "inji-certify",
+    credential: "credential",
+    wallet: "inji-mobile",
+    verifier: "inji-verify",
+    presentationProtocol: "openid4vp"
+  });
+  const exchange = runService.addExchange(run.runId, {
+    stepName: "Verification Result Retrieval",
+    protocol: "openid4vp",
+    direction: "verifier-to-playground",
+    status: "ERROR",
+    diagnostic: {
+      code: "NO_VP_SUBMISSION",
+      upstreamStatus: 404,
+      retryable: true
+    },
+    error: null
+  });
+  const saved = JSON.parse(persistedRuns)[run.runId].exchanges[0];
+
+  assert.equal(exchange.runId, run.runId);
+  assert.equal(exchange.componentId, "inji-verify");
+  assert.equal(
+    exchange.protocolStep,
+    "Verification Result Retrieval"
+  );
+  assert.equal(exchange.status, "ERROR");
+  assert.deepEqual(saved.diagnostic, {
+    code: "NO_VP_SUBMISSION",
+    upstreamStatus: 404,
+    retryable: true
+  });
+  assert.equal(runService.getRun(run.runId).status, "IN_PROGRESS");
 });
 
 test("stores a verifier-confirmed presentation rejection without credential data", () => {

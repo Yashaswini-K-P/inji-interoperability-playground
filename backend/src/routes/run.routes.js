@@ -2,11 +2,18 @@ const express = require("express");
 
 const {
   getRun,
-  createRun,
-  addExchange
+  listRuns,
+  createRun
 } = require("../services/run.service");
 
 const router = express.Router();
+
+router.get("/", (req, res) => {
+  res.json({
+    success: true,
+    runs: listRuns()
+  });
+});
 
 router.post("/", (req, res) => {
   try {
@@ -77,22 +84,14 @@ router.get("/:runId", (req, res) => {
 });
 
 router.post("/:runId/exchanges", (req, res) => {
-  try {
-    const exchange = addExchange(
-      req.params.runId,
-      req.body
-    );
-
-    res.status(201).json({
-      success: true,
-      exchange
-    });
-  } catch (error) {
-    res.status(404).json({
-      success: false,
-      error: error.message
-    });
-  }
+  res.status(405).json({
+    success: false,
+    error: "Exchange history is recorded by backend protocol operations",
+    errorCode: "EXCHANGE_WRITE_UNSUPPORTED",
+    diagnostic: {
+      action: "Use the issuance, wallet, or verification operation routes"
+    }
+  });
 });
 
 module.exports = router;
