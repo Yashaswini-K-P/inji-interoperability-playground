@@ -142,10 +142,40 @@ The detailed Verify response can contain credential contents, so the
 Playground persists and returns only its transaction ID, aggregate
 result, credential count, and retrieval timestamp.
 
+## OpenID4VCI Inji Mobile Handoff
+
+Create and prepare an issuance offer in this order:
+
+1. `POST /api/issuance/runs/:runId/pre-authorized-offer` with
+   `issuerId` and `credentialConfigurationId` (and optional `claims`,
+   `expiresIn`, and `txCode`). A successful response is returned only
+   after Certify supplies a non-empty `credential_offer_uri` and the
+   Playground stores it on the run.
+2. `GET /api/wallet/runs/:runId/continue` returns the stored offer URI
+   for the selected wallet. Its `READY` status and
+   `handoffStatus: "PREPARED"` mean only that the handoff data is ready.
+   The exchange's `externalAction: "wallet-scan-not-observed"` makes
+   explicit that the Playground cannot observe wallet scanning or
+   credential storage.
+3. The user must open Inji Mobile and scan/use the returned offer. Inji
+   Mobile owns token exchange, holder-key proof generation, credential
+   request, and credential storage. The Playground's
+   `POST /api/issuance/runs/:runId/credential` intentionally returns
+   HTTP `501` with `errorCode: "CREDENTIAL_REQUEST_UNSUPPORTED"`; it
+   does not call Certify's credential endpoint or report a received
+   credential.
+
+Offer creation failures use `ISSUER_OFFER_REQUEST_FAILED`; a successful
+upstream response without a usable offer URI uses
+`INVALID_ISSUER_OFFER_RESPONSE`. Neither a prepared handoff nor an
+issuance offer changes an incomplete run to a completed/pass result.
+Actual scanning and issuance have not been verified against a running
+Inji Mobile wallet by these backend tests.
+
 Run the focused OpenID4VP tests from the backend directory with:
 
 ```powershell
-node --test test\injiVerify.adapter.test.js test\openid4vpQr.test.js test\verifier.routes.test.js test\verifierConfiguration.test.js test\walletPresentation.routes.test.js test\walletCapabilities.test.js test\runLifecycle.test.js test\verifierResult.routes.test.js
+node --test test\injiVerify.adapter.test.js test\openid4vpQr.test.js test\verifier.routes.test.js test\verifierConfiguration.test.js test\walletPresentation.routes.test.js test\walletCapabilities.test.js test\runLifecycle.test.js test\verifierResult.routes.test.js test\issuanceToken.routes.test.js test\issuanceOffer.service.test.js
 ```
 
 ## Core Idea

@@ -4,23 +4,40 @@ const {
   createPreAuthorizedOffer,
   getCredentialOffer,
   createPreAuthorizedOfferForRun,
-  requestToken,
-  requestCredential
+  requestToken
 } = require("../services/issuance.service");
 
 const {
   addExchange,
   getRun,
-  setRunOffer,
-  setRunToken
+  setRunOffer
 } = require("../services/run.service");
 
-const {
-  createCredentialRequest
-} = require("../services/wallet.service");
-
-
 const router = express.Router();
+
+const SAFE_TOKEN_ERROR_CODES = new Set([
+  "ECONNABORTED",
+  "ETIMEDOUT",
+  "ECONNREFUSED",
+  "ENOTFOUND",
+  "EAI_AGAIN",
+  "ERR_BAD_REQUEST",
+  "ERR_BAD_RESPONSE",
+  "ERR_NETWORK",
+  "ERR_CANCELED"
+]);
+
+function createOfferExchange(status, durationMs, error, diagnostic) {
+  return {
+    stepName: "Pre-Authorized Data",
+    protocol: "OpenID4VCI",
+    direction: "playground-to-issuer",
+    status,
+    durationMs,
+    error,
+    ...(diagnostic ? { diagnostic } : {})
+  };
+}
 
 router.post("/pre-authorized-offer", async (req, res) => {
   try {
@@ -115,8 +132,35 @@ router.post(
     } = req.body;
 
     const startTime = Date.now();
+    let exchangeAttempted = false;
 
     try {
+      const run = getRun(req.params.runId);
+
+      if (!run) {
+        return res.status(404).json({
+          success: false,
+          error: "Run not found",
+          errorCode: "RUN_NOT_FOUND"
+        });
+      }
+
+      if (!issuerId || !credentialConfigurationId) {
+        return res.status(400).json({
+          success: false,
+          error: "issuerId and credentialConfigurationId are required",
+          errorCode: "INVALID_OFFER_REQUEST"
+        });
+      }
+
+      if (issuerId !== run.scenario.issuer) {
+        return res.status(400).json({
+          success: false,
+          error: "issuerId must match the issuer configured for this run",
+          errorCode: "RUN_ISSUER_MISMATCH"
+        });
+      }
+
       const result =
         await createPreAuthorizedOfferForRun(
           req.params.runId,
@@ -129,36 +173,69 @@ router.post(
           }
         );
 
-      const exchange = addExchange(
-        req.params.runId,
-        {
-          stepName: "Pre-Authorized Data",
-          protocol: "OpenID4VCI",
-          direction: "playground-to-issuer",
-          status: result.success
-            ? "SUCCESS"
-            : "FAILED",
-          durationMs: result.durationMs,
-          error: result.success
-            ? null
-            : result.error
-        }
-      );
+      const durationMs = Date.now() - startTime;
 
       if (!result.success) {
+        exchangeAttempted = true;
+        const exchange = addExchange(
+          req.params.runId,
+          createOfferExchange(
+            "FAILED",
+            result.durationMs,
+            "Certify did not create the pre-authorized offer",
+            {
+              code: "ISSUER_OFFER_REQUEST_FAILED",
+              upstreamStatus: result.diagnostic?.upstreamStatus || null,
+              action: "Check Certify availability and the issuer configuration, then retry"
+            }
+          )
+        );
+
         return res.status(502).json({
           success: false,
+          error: "Certify did not create the pre-authorized offer",
+          errorCode: "ISSUER_OFFER_REQUEST_FAILED",
+          diagnostic: exchange.diagnostic,
           exchange
         });
       }
 
-   const offerUri = result.offer.credential_offer_uri;
+      const offerUri = result.offer?.credential_offer_uri;
 
-setRunOffer(req.params.runId, {
-  credentialOfferUri: offerUri,
-  type: "openid-credential-offer"
-});
+      if (typeof offerUri !== "string" || !offerUri.trim()) {
+        exchangeAttempted = true;
+        const exchange = addExchange(
+          req.params.runId,
+          createOfferExchange(
+            "FAILED",
+            durationMs,
+            "Certify returned an offer response without credential_offer_uri",
+            {
+              code: "INVALID_ISSUER_OFFER_RESPONSE",
+              action: "Check the Certify offer response contract before retrying"
+            }
+          )
+        );
 
+        return res.status(502).json({
+          success: false,
+          error: "Certify returned an invalid offer response",
+          errorCode: "INVALID_ISSUER_OFFER_RESPONSE",
+          diagnostic: exchange.diagnostic,
+          exchange
+        });
+      }
+
+      setRunOffer(req.params.runId, {
+        credentialOfferUri: offerUri,
+        type: "openid-credential-offer"
+      });
+
+      exchangeAttempted = true;
+      const exchange = addExchange(
+        req.params.runId,
+        createOfferExchange("SUCCESS", durationMs, null)
+      );
 
       res.status(201).json({
         success: true,
@@ -168,30 +245,44 @@ setRunOffer(req.params.runId, {
     } catch (error) {
       const durationMs = Date.now() - startTime;
 
-      try {
-        const exchange = addExchange(
-          req.params.runId,
-          {
-            stepName: "Pre-Authorized Data",
-            protocol: "OpenID4VCI",
-            direction: "playground-to-issuer",
-            status: "FAILED",
-            durationMs,
-            error: error.message
-          }
-        );
+      if (!exchangeAttempted) {
+        exchangeAttempted = true;
+        let exchange;
+        try {
+          exchange = addExchange(
+            req.params.runId,
+            createOfferExchange(
+              "ERROR",
+              durationMs,
+              "The Playground could not store or record the Certify offer",
+              {
+                code: "OFFER_LIFECYCLE_FAILED",
+                action: "Check the run store and retry after resolving the reported server issue"
+              }
+            )
+          );
+        } catch (recordError) {
+          return res.status(500).json({
+            success: false,
+            error: "The Playground could not record the offer operation",
+            errorCode: "EXCHANGE_RECORDING_FAILED"
+          });
+        }
 
-        return res.status(502).json({
-          success: false,
-          error: error.message,
-          exchange
-        });
-      } catch (runError) {
         return res.status(500).json({
           success: false,
-          error: error.message
+          error: "The Playground could not store or record the Certify offer",
+          errorCode: "OFFER_LIFECYCLE_FAILED",
+          diagnostic: exchange.diagnostic,
+          exchange
         });
       }
+
+      return res.status(500).json({
+        success: false,
+        error: "The Playground could not record the offer operation",
+        errorCode: "EXCHANGE_RECORDING_FAILED"
+      });
     }
   }
 );
@@ -304,12 +395,21 @@ router.post(
           txCode
         }
       );
-      setRunToken(
-  req.params.runId,
-  token
-);
 
       const durationMs = Date.now() - startTime;
+      const tokenMetadata = {
+        tokenType:
+          typeof token.token_type === "string"
+            ? token.token_type
+            : null,
+        expiresIn:
+          Number.isFinite(token.expires_in)
+            ? token.expires_in
+            : null,
+        hasCNonce:
+          typeof token.c_nonce === "string" &&
+          token.c_nonce.length > 0
+      };
 
       const exchange = addExchange(
         req.params.runId,
@@ -325,7 +425,7 @@ router.post(
 
       res.json({
         success: true,
-        token,
+        token: tokenMetadata,
         exchange
       });
     } catch (error) {
@@ -339,7 +439,13 @@ router.post(
           direction: "playground-to-issuer",
           status: "FAILED",
           durationMs,
-          error: error.response?.data || error.message
+          error: "Token request failed",
+          diagnostic: {
+            code: SAFE_TOKEN_ERROR_CODES.has(error.code)
+              ? error.code
+              : null,
+            upstreamStatus: error.response?.status || null
+          }
         }
       );
 
@@ -354,130 +460,27 @@ router.post(
 
 router.post(
   "/runs/:runId/credential",
-  async (req, res) => {
-    const startTime = Date.now();
+  (req, res) => {
+    const run = getRun(req.params.runId);
 
-    try {
-      const run = getRun(req.params.runId);
-
-      if (!run) {
-        return res.status(404).json({
-          success: false,
-          error: "Run not found"
-        });
-      }
-
-      if (!run.token) {
-        return res.status(400).json({
-          success: false,
-          error: "Token request must be completed first"
-        });
-      }
-
-      const issuerId = run.scenario.issuer;
-      const walletId = run.scenario.wallet;
-      const credentialConfigurationId =
-        run.scenario.credential;
-
-      const token = run.token;
-
-      const issuerAdapter =
-        require("../services/issuer.service")
-          .getIssuerAdapter(issuerId);
-
-      const credentials =
-        await issuerAdapter.getCredentials();
-
-      const credentialConfiguration =
-        credentials.find(
-          (credential) =>
-            credential.id === credentialConfigurationId
-        );
-
-      if (!credentialConfiguration) {
-        throw new Error(
-          `Credential configuration not found: ${credentialConfigurationId}`
-        );
-      }
-
-      const metadata =
-        await issuerAdapter.getMetadata();
-
-      const credentialIssuer =
-        metadata.credential_issuer;
-
-      const walletRequest =
-        await createCredentialRequest(
-          walletId,
-          {
-            accessToken: token.access_token,
-            cNonce: token.c_nonce,
-            credentialIssuer,
-            credentialConfiguration
-          }
-        );
-
-      const credentialResponse =
-        await requestCredential(
-          issuerId,
-          {
-            accessToken: walletRequest.accessToken,
-            format:
-              walletRequest.request.format,
-            credentialDefinition:
-              walletRequest.request
-                .credential_definition,
-            proof:
-              walletRequest.request.proof
-          }
-        );
-
-      const durationMs =
-        Date.now() - startTime;
-
-      const exchange = addExchange(
-        req.params.runId,
-        {
-          stepName: "Credential Request",
-          protocol: "OpenID4VCI",
-          direction: "wallet-to-issuer",
-          status: "SUCCESS",
-          durationMs,
-          error: null
-        }
-      );
-
-      res.json({
-        success: true,
-        credential: credentialResponse,
-        exchange
-      });
-    } catch (error) {
-      const durationMs =
-        Date.now() - startTime;
-
-      const exchange = addExchange(
-        req.params.runId,
-        {
-          stepName: "Credential Request",
-          protocol: "OpenID4VCI",
-          direction: "wallet-to-issuer",
-          status: "FAILED",
-          durationMs,
-          error: error.message,
-          diagnostic: {
-            code: error.code || null,
-            upstreamStatus: error.response?.status || null
-          }
-        }
-      );
-
-      res.status(error.statusCode || 502).json({
+    if (!run) {
+      return res.status(404).json({
         success: false,
-        error: error.message,
-        exchange
+        error: "Run not found",
+        errorCode: "RUN_NOT_FOUND"
       });
     }
+
+    return res.status(501).json({
+      success: false,
+      error: "The Playground does not create wallet credential requests",
+      errorCode: "CREDENTIAL_REQUEST_UNSUPPORTED",
+      diagnostic: {
+        owner: "selected-wallet",
+        action:
+          "Continue issuance in the selected wallet using the credential offer handoff"
+      }
+    });
   }
 );
 

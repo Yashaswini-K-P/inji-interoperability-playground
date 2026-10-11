@@ -14,6 +14,7 @@ const storedRun = {
   status: "IN_PROGRESS",
   token: {
     access_token: "sensitive-access-token",
+    refresh_token: "sensitive-refresh-token",
     token_type: "Bearer"
   },
   scenario: {
@@ -78,6 +79,10 @@ test("does not expose the persisted access token in run details", async () => {
   assert.equal(Object.hasOwn(body.run, "token"), false);
   assert.equal(
     JSON.stringify(body).includes("sensitive-access-token"),
+    false
+  );
+  assert.equal(
+    JSON.stringify(body).includes("sensitive-refresh-token"),
     false
   );
   assert.equal(storedRun.token.access_token, "sensitive-access-token");

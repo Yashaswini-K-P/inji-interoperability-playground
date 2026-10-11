@@ -65,8 +65,12 @@ async function createPreAuthorizedOfferForRun(
 
     return {
       success: false,
-      error: error.message,
-      durationMs
+      durationMs,
+      diagnostic: {
+        upstreamStatus: Number.isInteger(error.response?.status)
+          ? error.response.status
+          : null
+      }
     };
   }
 }

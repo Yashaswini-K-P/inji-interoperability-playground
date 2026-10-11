@@ -46,7 +46,7 @@ test.after(() => {
   }
 });
 
-test("keeps successful but incomplete runs in progress and marks failed steps failed", () => {
+test("keeps prepared wallet handoffs in progress and marks failed steps failed", () => {
   const run = runService.createRun({
     issuer: "inji-certify",
     credential: "credential",
@@ -58,12 +58,14 @@ test("keeps successful but incomplete runs in progress and marks failed steps fa
   assert.equal(run.status, "IN_PROGRESS");
 
   const readyStep = runService.addExchange(run.runId, {
-    stepName: "Authorization URI Generation",
+    stepName: "Wallet Handoff",
+    protocol: "OpenID4VCI",
     status: "READY"
   });
 
   assert.equal(readyStep.timestamp.length > 0, true);
   assert.equal(runService.getRun(run.runId).status, "IN_PROGRESS");
+  assert.equal(runService.getRun(run.runId).exchanges.length, 1);
 
   runService.addExchange(run.runId, {
     stepName: "Presentation Request Creation",

@@ -111,24 +111,12 @@ class InjiCertifyAdapter {
   }
 
   async requestCredential({
-  accessToken,
-  format,
-  credentialDefinition,
-  proof
-}) {
-  const tokenParts = accessToken.split(".");
-
-  if (tokenParts.length === 3) {
-    const tokenPayload = JSON.parse(
-      Buffer.from(tokenParts[1], "base64url").toString()
-    );
-
-    console.log("=== ACCESS TOKEN DEBUG ===");
-    console.log(JSON.stringify(tokenPayload, null, 2));
-    console.log("==========================");
-  }
-
-  const response = await axios.post(
+    accessToken,
+    format,
+    credentialDefinition,
+    proof
+  }) {
+    const response = await axios.post(
     `${this.config.baseUrl}/v1/certify/issuance/credential`,
     {
       format,

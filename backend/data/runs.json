@@ -11,8 +11,7 @@
       "wallet": "inji-mobile"
     },
     "exchanges": [],
-    "offer": null,
-    "token": null
+    "offer": null
   },
   "RUN-25D2FC": {
     "runId": "RUN-25D2FC",
@@ -80,13 +79,6 @@
     "offer": {
       "credentialOfferUri": "openid-credential-offer://?credential_offer_uri=http%3A%2F%2Fcertify-nginx%3A80%2Fv1%2Fcertify%2Fcredential-offer-data%2Fdfc156a9-aec4-4990-939f-3f54728b52da",
       "type": "openid-credential-offer"
-    },
-    "token": {
-      "access_token": "eyJiNjQiOmZhbHNlLCJjcml0IjpbImI2NCJdLCJraWQiOiItd3hBUUYzdDBfXzNpeGlIdGNpZU9XdFFMRWFGcWZrUVRscjQzWnlucnlJIiwiYWxnIjoiUlMyNTYifQ.eyJzdWIiOiJ7fSIsImF1ZCI6Imh0dHA6Ly9jZXJ0aWZ5LW5naW54OjgwL3YxL2NlcnRpZnkvaXNzdWFuY2UvY3JlZGVudGlhbCIsImNfbm9uY2VfZXhwaXJlc19pbiI6NDAsImNfbm9uY2UiOiI0YzRjYjQwNC1mMzI2LTRlNTQtYmU4Mi0yYTY1YTdhNWQ2MzQiLCJzY29wZSI6Im1vY2tfaWRlbnRpdHlfdmNfbGRwIiwiaXNzIjoiaHR0cHM6Ly9lc2lnbmV0LW1vY2suY29sbGFiLm1vc2lwLm5ldCIsImV4cCI6MTc5MTQ3NzEyNSwiaWF0IjoxNzkxNDc2NTI1LCJjbGllbnRfaWQiOiIifQ.Ryb-iZye1kyxkqa4xTlomz4H1y2dRcS93J91bExQdjDyPCd3_YSU4dKsE14OobuVtEtqvrXgzr9XSay_8IX4kDAW6kbQsf5vJa0GuqmitJv6go0S1wHDC0VzP7GgQY5rLb7y_V2fpI6CoUIKxqFlnULq2-h_Deq6YWrzt2CpmG38YYERMVEVuWn73aHiPPc-b6WLsFGoQalOqlqH_V9SQihaZij77Y_lCGlrNJVofqwh8lbma5Q13vHiGAv5RmR1yLUSaHPt2IMMc5MhqHGnF_t-TqHao2OEGYiwFloyqoGuoRp5D58QJwBc-7WIpGnSdStducnPorgPaNELcBQJpA",
-      "token_type": "Bearer",
-      "expires_in": 600,
-      "c_nonce": "4c4cb404-f326-4e54-be82-2a65a7a5d634",
-      "c_nonce_expires_in": 40
     }
   },
   "RUN-B3722D": {
@@ -174,8 +166,7 @@
         "error": "INJI_VERIFY_CLIENT_ID must be configured with the verifier client ID accepted by the selected wallet"
       }
     ],
-    "offer": null,
-    "token": null
+    "offer": null
   },
   "RUN-572E81": {
     "runId": "RUN-572E81",
@@ -214,7 +205,6 @@
       }
     ],
     "offer": null,
-    "token": null,
     "presentationRequest": {
       "verifierId": "inji-verify",
       "protocol": "openid4vp",
@@ -272,7 +262,6 @@
       }
     ],
     "offer": null,
-    "token": null,
     "presentationRequest": {
       "verifierId": "inji-verify",
       "protocol": "openid4vp",
@@ -305,5 +294,51 @@
         "expiresAt": 1791620726151
       }
     }
+  },
+  "RUN-195468": {
+    "runId": "RUN-195468",
+    "status": "IN_PROGRESS",
+    "createdAt": "2026-10-11T07:18:22.029Z",
+    "scenario": {
+      "issuer": "inji-certify",
+      "credential": "FarmerCredential",
+      "format": "ldp_vc",
+      "issuanceFlow": "pre-authorized",
+      "wallet": "inji-mobile",
+      "verifier": "inji-verify",
+      "presentationProtocol": "openid4vp"
+    },
+    "exchanges": [
+      {
+        "step": 1,
+        "timestamp": "2026-10-11T07:18:49.713Z",
+        "stepName": "Pre-Authorized Data",
+        "protocol": "OpenID4VCI",
+        "direction": "playground-to-issuer",
+        "status": "SUCCESS",
+        "durationMs": 81,
+        "error": null
+      },
+      {
+        "step": 2,
+        "timestamp": "2026-10-11T07:19:48.094Z",
+        "stepName": "Wallet Handoff",
+        "protocol": "OpenID4VCI",
+        "direction": "playground-to-wallet",
+        "status": "READY",
+        "externalAction": "wallet-scan-not-observed",
+        "handoffStatus": "PREPARED",
+        "actionRequired": "Scan the offer with the selected wallet",
+        "durationMs": 0,
+        "error": null
+      }
+    ],
+    "offer": {
+      "credentialOfferUri": "openid-credential-offer://?credential_offer_uri=http%3A%2F%2Fcertify-nginx%3A80%2Fv1%2Fcertify%2Fcredential-offer-data%2F188e72ca-82d6-4a5f-9e4c-0fcc320c80f9",
+      "type": "openid-credential-offer"
+    },
+    "presentationRequest": null,
+    "verificationResult": null,
+    "result": null
   }
 }

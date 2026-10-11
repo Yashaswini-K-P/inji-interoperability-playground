@@ -14,44 +14,49 @@ const router = express.Router();
 
 router.get("/runs/:runId/continue", (req, res) => {
   const startTime = Date.now();
+  let exchangeAttempted = false;
+  const run = getRun(req.params.runId);
+
+  if (!run) {
+    return res.status(404).json({
+      success: false,
+      error: "Run not found",
+      errorCode: "RUN_NOT_FOUND"
+    });
+  }
+
+  const walletId = run.scenario.wallet;
+  const credentialOfferUri = run.offer?.credentialOfferUri;
+
+  if (!walletId) {
+    return res.status(400).json({
+      success: false,
+      error: "No wallet selected for this run",
+      errorCode: "WALLET_NOT_SELECTED"
+    });
+  }
+
+  if (!credentialOfferUri) {
+    return res.status(409).json({
+      success: false,
+      error: "Credential offer not available for this run",
+      errorCode: "CREDENTIAL_OFFER_NOT_AVAILABLE"
+    });
+  }
 
   try {
-    const run = getRun(req.params.runId);
-
-    if (!run) {
-      return res.status(404).json({
-        success: false,
-        error: "Run not found"
-      });
-    }
-
-    const walletId = run.scenario.wallet;
-
-    if (!walletId) {
-      return res.status(400).json({
-        success: false,
-        error: "No wallet selected for this run"
-      });
-    }
-
-    const credentialOfferUri =
-      run.offer?.credentialOfferUri;
-
-    if (!credentialOfferUri) {
-      return res.status(400).json({
-        success: false,
-        error: "Credential offer not available for this run"
-      });
-    }
-
-    const continuation =
-      createWalletContinuation(
+    const continuation = {
+      ...createWalletContinuation(
         walletId,
         credentialOfferUri
-      );
+      ),
+      handoffStatus: "PREPARED",
+      externalAction: "wallet-scan-not-observed"
+    };
 
     const durationMs = Date.now() - startTime;
 
+    exchangeAttempted = true;
     const exchange = addExchange(
       req.params.runId,
       {
@@ -59,6 +64,9 @@ router.get("/runs/:runId/continue", (req, res) => {
         protocol: "OpenID4VCI",
         direction: "playground-to-wallet",
         status: "READY",
+        externalAction: "wallet-scan-not-observed",
+        handoffStatus: "PREPARED",
+        actionRequired: "Scan the offer with the selected wallet",
         durationMs,
         error: null
       }
@@ -72,30 +80,49 @@ router.get("/runs/:runId/continue", (req, res) => {
   } catch (error) {
     const durationMs = Date.now() - startTime;
 
+    if (exchangeAttempted) {
+      return res.status(500).json({
+        success: false,
+        error: "The Playground could not record the wallet handoff",
+        errorCode: "EXCHANGE_RECORDING_FAILED"
+      });
+    }
+
+    exchangeAttempted = true;
+    let exchange;
     try {
-      const exchange = addExchange(
+      exchange = addExchange(
         req.params.runId,
         {
-          stepName: "Wallet Continuation",
+          stepName: "Wallet Handoff",
           protocol: "OpenID4VCI",
           direction: "playground-to-wallet",
           status: "FAILED",
+          externalAction: "wallet-scan-not-observed",
+          handoffStatus: "NOT_PREPARED",
           durationMs,
-          error: error.message
+          error: "Wallet handoff could not be prepared",
+          diagnostic: {
+            code: "WALLET_HANDOFF_PREPARATION_FAILED",
+            action: "Verify the selected wallet and stored offer URI"
+          }
         }
       );
-
-      res.status(502).json({
+    } catch (recordError) {
+      return res.status(500).json({
         success: false,
-        error: "Wallet continuation failed",
-        exchange
-      });
-    } catch (runError) {
-      res.status(500).json({
-        success: false,
-        error: error.message
+        error: "The Playground could not record the wallet handoff",
+        errorCode: "EXCHANGE_RECORDING_FAILED"
       });
     }
+
+    return res.status(502).json({
+      success: false,
+      error: "Wallet handoff could not be prepared",
+      errorCode: "WALLET_HANDOFF_PREPARATION_FAILED",
+      diagnostic: exchange.diagnostic,
+      exchange
+    });
   }
 });
 

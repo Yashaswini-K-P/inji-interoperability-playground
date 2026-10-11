@@ -32,6 +32,8 @@ class InjiMobileAdapter {
       protocol: "openid4vci",
       credentialOfferUri,
       type: "openid-credential-offer",
+      handoffStatus: "PREPARED",
+      externalAction: "wallet-scan-not-observed",
       status: "READY"
     };
   }

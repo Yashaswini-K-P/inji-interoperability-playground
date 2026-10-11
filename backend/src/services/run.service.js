@@ -22,12 +22,109 @@ function loadRuns() {
     }
 
     const parsed = JSON.parse(data);
+    let sanitized = false;
+
+    for (const run of Object.values(parsed)) {
+      sanitized = sanitizePersistedRun(run) || sanitized;
+    }
+
+    if (sanitized) {
+      const temporaryRunsFile = `${runsFile}.${process.pid}.tmp`;
+
+      try {
+        fs.writeFileSync(
+          temporaryRunsFile,
+          JSON.stringify(parsed, null, 2),
+          "utf8"
+        );
+        fs.renameSync(temporaryRunsFile, runsFile);
+      } catch (error) {
+        if (fs.existsSync(temporaryRunsFile)) {
+          fs.unlinkSync(temporaryRunsFile);
+        }
+        throw error;
+      }
+    }
 
     return new Map(Object.entries(parsed));
   } catch (error) {
     console.error("Failed to load runs:", error.message);
     return new Map();
   }
+}
+
+function sanitizePersistedRun(run) {
+  if (!run || typeof run !== "object" || Array.isArray(run)) {
+    return false;
+  }
+
+  const sensitiveValues = new Set();
+
+  function collectSensitiveValues(value) {
+    if (!value || typeof value !== "object") {
+      return;
+    }
+
+    for (const [key, nestedValue] of Object.entries(value)) {
+      const normalizedKey = key.toLowerCase().replace(/[_-]/g, "");
+
+      if (
+        ["accesstoken", "refreshtoken"].includes(normalizedKey) &&
+        typeof nestedValue === "string" &&
+        nestedValue
+      ) {
+        sensitiveValues.add(nestedValue);
+      }
+
+      collectSensitiveValues(nestedValue);
+    }
+  }
+
+  collectSensitiveValues(run);
+
+  let changed = false;
+
+  function removeSensitiveFields(value, isRunRoot = false) {
+    if (!value || typeof value !== "object") {
+      return;
+    }
+
+    for (const [key, nestedValue] of Object.entries(value)) {
+      const normalizedKey = key.toLowerCase().replace(/[_-]/g, "");
+      const isSensitiveField =
+        ["accesstoken", "refreshtoken", "authorization"].includes(
+          normalizedKey
+        ) ||
+        (isRunRoot && normalizedKey === "token");
+
+      if (isSensitiveField) {
+        delete value[key];
+        changed = true;
+        continue;
+      }
+
+      if (typeof nestedValue === "string") {
+        let sanitizedValue = nestedValue;
+
+        for (const sensitiveValue of sensitiveValues) {
+          sanitizedValue = sanitizedValue
+            .split(sensitiveValue)
+            .join("[REDACTED]");
+        }
+
+        if (sanitizedValue !== nestedValue) {
+          value[key] = sanitizedValue;
+          changed = true;
+        }
+      } else {
+        removeSensitiveFields(nestedValue);
+      }
+    }
+  }
+
+  removeSensitiveFields(run, true);
+
+  return changed;
 }
 
 const runs = loadRuns();
@@ -62,7 +159,6 @@ function createRun(config) {
 
     exchanges: [],
     offer: null,
-    token: null,
     presentationRequest: null,
     verificationResult: null,
     result: null
@@ -91,6 +187,7 @@ function addExchange(runId, exchange) {
     ...exchange
   };
 
+  sanitizePersistedRun(recordedExchange);
   run.exchanges.push(recordedExchange);
 
   if (recordedExchange.status === "FAILED") {
@@ -110,20 +207,6 @@ function setRunOffer(runId, offer) {
   }
 
   run.offer = offer;
-
-  saveRuns();
-
-  return run;
-}
-
-function setRunToken(runId, token) {
-  const run = runs.get(runId);
-
-  if (!run) {
-    throw new Error(`Run not found: ${runId}`);
-  }
-
-  run.token = token;
 
   saveRuns();
 
@@ -245,7 +328,6 @@ module.exports = {
   addExchange,
   updateRunStatus,
   setRunOffer,
-  setRunToken,
   setRunPresentationRequest,
   setRunVerificationResult,
   setRunVerificationFailure

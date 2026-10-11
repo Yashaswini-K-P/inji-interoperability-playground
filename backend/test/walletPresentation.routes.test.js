@@ -17,22 +17,28 @@ let currentRun;
 let exchanges;
 let server;
 let baseUrl;
+let createWalletContinuation;
 let createPresentationRequestContinuation;
 
 const runServiceMock = {
   getRun: () => currentRun,
   addExchange: (runId, exchange) => {
     const recordedExchange = {
-      step: exchanges.length + 1,
+      step: currentRun.exchanges.length + 1,
       ...exchange
     };
     exchanges.push(recordedExchange);
+    currentRun.exchanges.push(recordedExchange);
+    if (recordedExchange.status === "FAILED") {
+      currentRun.status = "FAILED";
+    }
     return recordedExchange;
   }
 };
 
 const walletServiceMock = {
-  createWalletContinuation: () => ({}),
+  createWalletContinuation: (walletId, offerUri) =>
+    createWalletContinuation(walletId, offerUri),
   createPresentationRequestContinuation: (
     walletId,
     verifierResponse,
@@ -101,11 +107,16 @@ function setRun(presentationRequest) {
   exchanges = [];
   currentRun = {
     runId: "RUN-TEST",
+    status: "IN_PROGRESS",
     scenario: {
       wallet: "inji-mobile",
       verifier: "inji-verify",
       presentationProtocol: "openid4vp"
     },
+    offer: {
+      credentialOfferUri: "openid-credential-offer://issuer/offer-1"
+    },
+    exchanges: [],
     presentationRequest
   };
 }
@@ -171,6 +182,86 @@ test("returns the unchanged verifier response and QR URI without recording it in
   );
   assert.equal(Object.hasOwn(body.exchange, "qrUri"), false);
   assert.equal(exchanges.length, 1);
+});
+
+test("prepares an offer handoff without claiming wallet scan or credential receipt", async () => {
+  setRun(null);
+  const offerUri = currentRun.offer.credentialOfferUri;
+  createWalletContinuation = (walletId, receivedOfferUri) => {
+    assert.equal(walletId, "inji-mobile");
+    assert.equal(receivedOfferUri, offerUri);
+    return {
+      walletId,
+      protocol: "openid4vci",
+      credentialOfferUri: receivedOfferUri,
+      type: "openid-credential-offer",
+      status: "READY"
+    };
+  };
+
+  const response = await fetch(
+    `${baseUrl}/api/wallet/runs/RUN-TEST/continue`
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.success, true);
+  assert.equal(body.wallet.credentialOfferUri, offerUri);
+  assert.equal(body.wallet.handoffStatus, "PREPARED");
+  assert.equal(body.wallet.status, "READY");
+  assert.equal(body.exchange.status, "READY");
+  assert.equal(
+    body.exchange.externalAction,
+    "wallet-scan-not-observed"
+  );
+  assert.equal(body.exchange.handoffStatus, "PREPARED");
+  assert.equal(
+    body.exchange.actionRequired,
+    "Scan the offer with the selected wallet"
+  );
+  assert.equal(currentRun.status, "IN_PROGRESS");
+  assert.equal(currentRun.exchanges.length, 1);
+  assert.equal(
+    currentRun.exchanges.some((exchange) =>
+      /credential received|credential stored/i.test(exchange.stepName)
+    ),
+    false
+  );
+});
+
+test("does not record or prepare a handoff when the run has no offer", async () => {
+  setRun(null);
+  currentRun.offer = null;
+
+  const response = await fetch(
+    `${baseUrl}/api/wallet/runs/RUN-TEST/continue`
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 409);
+  assert.equal(body.errorCode, "CREDENTIAL_OFFER_NOT_AVAILABLE");
+  assert.equal(exchanges.length, 0);
+});
+
+test("records one sanitized failure when offer handoff preparation fails", async () => {
+  setRun(null);
+  const secret = "wallet-error-token-secret";
+  createWalletContinuation = () => {
+    throw new Error(`failed with ${secret}`);
+  };
+
+  const response = await fetch(
+    `${baseUrl}/api/wallet/runs/RUN-TEST/continue`
+  );
+  const body = await response.json();
+  const output = JSON.stringify({ body, exchanges, run: currentRun });
+
+  assert.equal(response.status, 502);
+  assert.equal(body.errorCode, "WALLET_HANDOFF_PREPARATION_FAILED");
+  assert.equal(body.exchange.status, "FAILED");
+  assert.equal(exchanges.length, 1);
+  assert.equal(output.includes(secret), false);
+  assert.equal(currentRun.status, "FAILED");
 });
 
 test("records a failed handoff when the verifier response is invalid", async () => {
