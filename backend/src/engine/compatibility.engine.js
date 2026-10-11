@@ -1,6 +1,9 @@
 const {
   getComponentById
 } = require("../services/componentRegistry.service");
+const { hasIssuerAdapter } = require("../services/issuer.service");
+const { hasWalletAdapter } = require("../services/wallet.service");
+const { hasVerifierAdapter } = require("../services/verifier.service");
 
 function validateScenario(configuration) {
   const errors = [];
@@ -22,14 +25,26 @@ function validateScenario(configuration) {
 
   if (!issuer) {
     errors.push(`Unknown issuer: ${configuration.issuer}`);
+  } else if (!hasIssuerAdapter(issuer.id)) {
+    errors.push(
+      `Issuer ${issuer.name} is registered but has no implemented adapter`
+    );
   }
 
   if (!wallet) {
     errors.push(`Unknown wallet: ${configuration.wallet}`);
+  } else if (!hasWalletAdapter(wallet.id)) {
+    errors.push(
+      `Wallet ${wallet.name} is registered but has no implemented adapter`
+    );
   }
 
   if (!verifier) {
     errors.push(`Unknown verifier: ${configuration.verifier}`);
+  } else if (!hasVerifierAdapter(verifier.id)) {
+    errors.push(
+      `Verifier ${verifier.name} is registered but has no implemented adapter`
+    );
   }
 
   if (

@@ -5,6 +5,10 @@ const {
 const InjiVerifyAdapter =
   require("../adapters/verifiers/injiVerify.adapter");
 
+const verifierAdapterFactories = new Map([
+  ["inji-verify", (verifier) => new InjiVerifyAdapter(verifier)]
+]);
+
 function getVerifierAdapter(verifierId) {
   const verifier =
     getComponentById("verifiers", verifierId);
@@ -13,15 +17,17 @@ function getVerifierAdapter(verifierId) {
     throw new Error(`Unknown verifier: ${verifierId}`);
   }
 
-  switch (verifier.id) {
-    case "inji-verify":
-      return new InjiVerifyAdapter(verifier);
+  const createAdapter = verifierAdapterFactories.get(verifier.id);
 
-    default:
-      throw new Error(
-        `No adapter available for verifier: ${verifier.id}`
-      );
+  if (!createAdapter) {
+    throw new Error(`No adapter available for verifier: ${verifier.id}`);
   }
+
+  return createAdapter(verifier);
+}
+
+function hasVerifierAdapter(verifierId) {
+  return verifierAdapterFactories.has(verifierId);
 }
 
 function getVerifierInfo(verifierId) {
@@ -76,6 +82,7 @@ function getVerifierClientId(verifierId) {
 
 module.exports = {
   getVerifierAdapter,
+  hasVerifierAdapter,
   getVerifierInfo,
   getVerifierClientId,
   createPresentationRequest,

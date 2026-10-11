@@ -165,17 +165,34 @@ Create and prepare an issuance offer in this order:
    does not call Certify's credential endpoint or report a received
    credential.
 
+   Component registration and protocol declarations are not proof that a
+   callable adapter exists. Scenario creation checks the registered issuer,
+   wallet, and verifier against the implemented adapter factories. The
+   Inji Web wallet is listed for discovery, but this backend does not yet
+   have an Inji Web/Mimoto adapter; scenarios selecting it are rejected
+   instead of failing later during a wallet operation.
+
+   `POST /api/issuance/runs/:runId/token` is a separate Playground-to-
+   Certify token request, not the Inji Mobile wallet's token exchange. It
+returns only safe token metadata and does not persist or forward the
+token. A token exchange is recorded as successful only when Certify
+returns a non-empty access token and token type; malformed responses are
+recorded as failed without exposing token values.
+
 Offer creation failures use `ISSUER_OFFER_REQUEST_FAILED`; a successful
 upstream response without a usable offer URI uses
 `INVALID_ISSUER_OFFER_RESPONSE`. Neither a prepared handoff nor an
 issuance offer changes an incomplete run to a completed/pass result.
 Actual scanning and issuance have not been verified against a running
-Inji Mobile wallet by these backend tests.
+Inji Mobile wallet by these backend tests. The issuer metadata and
+credential endpoint URLs embedded in the offer must also be reachable
+from the phone; Docker-only hostnames such as `certify-nginx` are not
+mobile-reachable unless the device has a route and DNS for them.
 
 Run the focused OpenID4VP tests from the backend directory with:
 
 ```powershell
-node --test test\injiVerify.adapter.test.js test\openid4vpQr.test.js test\verifier.routes.test.js test\verifierConfiguration.test.js test\walletPresentation.routes.test.js test\walletCapabilities.test.js test\runLifecycle.test.js test\verifierResult.routes.test.js test\issuanceToken.routes.test.js test\issuanceOffer.service.test.js
+node --test test\injiVerify.adapter.test.js test\openid4vpQr.test.js test\verifier.routes.test.js test\verifierConfiguration.test.js test\walletPresentation.routes.test.js test\walletCapabilities.test.js test\runLifecycle.test.js test\verifierResult.routes.test.js test\issuanceToken.routes.test.js test\issuanceOffer.service.test.js test\scenarioAdapterAvailability.test.js
 ```
 
 ## Core Idea

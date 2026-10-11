@@ -4,6 +4,10 @@
 
 const InjiMobileAdapter = require("../adapters/wallets/injiMobile.adapter");
 
+const walletAdapterFactories = new Map([
+  ["inji-mobile", (wallet) => new InjiMobileAdapter(wallet)]
+]);
+
 function getWalletAdapter(walletId) {
   const wallet = getComponentById("wallets", walletId);
 
@@ -11,15 +15,17 @@ function getWalletAdapter(walletId) {
     throw new Error(`Unknown wallet: ${walletId}`);
   }
 
-  switch (wallet.id) {
-    case "inji-mobile":
-      return new InjiMobileAdapter(wallet);
+  const createAdapter = walletAdapterFactories.get(wallet.id);
 
-    default:
-      throw new Error(
-        `No adapter available for wallet: ${wallet.id}`
-      );
+  if (!createAdapter) {
+    throw new Error(`No adapter available for wallet: ${wallet.id}`);
   }
+
+  return createAdapter(wallet);
+}
+
+function hasWalletAdapter(walletId) {
+  return walletAdapterFactories.has(walletId);
 }
 
 function getWalletInfo(walletId) {
@@ -72,6 +78,7 @@ async function createCredentialRequest(
 
 module.exports = {
   getWalletAdapter,
+  hasWalletAdapter,
   getWalletInfo,
   createWalletContinuation,
   createPresentationRequestContinuation,

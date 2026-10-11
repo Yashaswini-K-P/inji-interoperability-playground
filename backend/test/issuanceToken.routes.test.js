@@ -258,6 +258,30 @@ test("does not expose upstream token values in errors, exchanges, or logs", asyn
   }
 });
 
+test("records malformed token responses as failed without exposing token values", async () => {
+  resetRun();
+  tokenResponse = {
+    token_type: "Bearer",
+    refresh_token: refreshTokenValue
+  };
+
+  const response = await requestRunToken({
+    preAuthorizedCode: "pre-authorized-code",
+    txCode: "1234"
+  });
+  const body = await response.json();
+  const output = JSON.stringify({ body, exchanges, run: currentRun });
+
+  assert.equal(response.status, 502);
+  assert.equal(body.success, false);
+  assert.equal(body.errorCode, "INVALID_TOKEN_RESPONSE");
+  assert.equal(body.exchange.status, "FAILED");
+  assert.equal(body.exchange.diagnostic.code, "INVALID_TOKEN_RESPONSE");
+  assert.equal(output.includes(accessTokenValue), false);
+  assert.equal(output.includes(refreshTokenValue), false);
+  assert.equal(currentRun.status, "FAILED");
+});
+
 test("rejects unsupported credential requests without changing run history", async () => {
   resetRun();
 

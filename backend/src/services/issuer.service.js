@@ -5,6 +5,10 @@ const {
 const InjiCertifyAdapter = require("../adapters/issuers/injiCertify.adapter");
 const issuanceFlows = require("../config/issuanceFlows");
 
+const issuerAdapterFactories = new Map([
+  ["inji-certify", (issuer) => new InjiCertifyAdapter(issuer)]
+]);
+
 function getIssuerAdapter(issuerId) {
   const issuer = getComponentById("issuers", issuerId);
 
@@ -12,15 +16,17 @@ function getIssuerAdapter(issuerId) {
     throw new Error(`Unknown issuer: ${issuerId}`);
   }
 
-  switch (issuer.id) {
-    case "inji-certify":
-      return new InjiCertifyAdapter(issuer);
+  const createAdapter = issuerAdapterFactories.get(issuer.id);
 
-    default:
-      throw new Error(
-        `No adapter available for issuer: ${issuer.id}`
-      );
+  if (!createAdapter) {
+    throw new Error(`No adapter available for issuer: ${issuer.id}`);
   }
+
+  return createAdapter(issuer);
+}
+
+function hasIssuerAdapter(issuerId) {
+  return issuerAdapterFactories.has(issuerId);
 }
 
 async function getIssuerCredentials(issuerId) {
@@ -57,6 +63,7 @@ async function getCredentialConfiguration(
 
 module.exports = {
   getIssuerAdapter,
+  hasIssuerAdapter,
   getIssuerCredentials,
   getCredentialConfiguration
 };

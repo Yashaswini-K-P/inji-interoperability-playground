@@ -397,6 +397,38 @@ router.post(
       );
 
       const durationMs = Date.now() - startTime;
+
+      if (
+        !token ||
+        typeof token.access_token !== "string" ||
+        !token.access_token.trim() ||
+        typeof token.token_type !== "string" ||
+        !token.token_type.trim()
+      ) {
+        const exchange = addExchange(
+          req.params.runId,
+          {
+            stepName: "Token Request",
+            protocol: "OpenID4VCI",
+            direction: "playground-to-issuer",
+            status: "FAILED",
+            durationMs,
+            error: "Certify returned an invalid token response",
+            diagnostic: {
+              code: "INVALID_TOKEN_RESPONSE",
+              action: "Check Certify token endpoint configuration and response"
+            }
+          }
+        );
+
+        return res.status(502).json({
+          success: false,
+          error: "Certify returned an invalid token response",
+          errorCode: "INVALID_TOKEN_RESPONSE",
+          exchange
+        });
+      }
+
       const tokenMetadata = {
         tokenType:
           typeof token.token_type === "string"
