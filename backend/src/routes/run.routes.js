@@ -67,9 +67,12 @@ router.get("/:runId", (req, res) => {
     });
   }
 
+  const publicRun = { ...run };
+  delete publicRun.token;
+
   res.json({
     success: true,
-    run
+    run: publicRun
   });
 });
 

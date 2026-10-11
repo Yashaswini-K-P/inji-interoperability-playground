@@ -110,7 +110,7 @@ function setRun(presentationRequest) {
   };
 }
 
-test("returns the unchanged verifier response and QR URI, recording READY", async () => {
+test("returns the unchanged verifier response and QR URI without recording it in the event", async () => {
   const verifierResponse = {
     requestId: "req-route-test",
     authorizationDetails: {
@@ -160,7 +160,16 @@ test("returns the unchanged verifier response and QR URI, recording READY", asyn
   assert.equal(body.wallet.handoffMethod, "cross-device-qr");
   assert.equal(body.wallet.status, "READY");
   assert.equal(body.exchange.status, "READY");
-  assert.equal(body.exchange.qrUri, qrUri);
+  assert.equal(
+    body.exchange.stepName,
+    "Authorization URI Generation"
+  );
+  assert.equal(body.exchange.initiatedBy, "playground");
+  assert.equal(
+    body.exchange.externalAction,
+    "wallet-scan-not-observed"
+  );
+  assert.equal(Object.hasOwn(body.exchange, "qrUri"), false);
   assert.equal(exchanges.length, 1);
 });
 

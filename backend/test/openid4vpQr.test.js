@@ -38,9 +38,6 @@ test("builds an OpenID4VP QR URI from a by-value response", () => {
   );
   const parsedUri = new URL(qrUri);
   const params = parsedUri.searchParams;
-  const clientMetadata = JSON.parse(
-    params.get("client_metadata")
-  );
 
   assert.equal(parsedUri.protocol, "openid4vp:");
   assert.equal(parsedUri.hostname, "authorize");
@@ -57,32 +54,61 @@ test("builds an OpenID4VP QR URI from a by-value response", () => {
     JSON.parse(params.get("presentation_definition")),
     presentationDefinition
   );
-  assert.deepEqual(clientMetadata, {
-    client_name: clientId,
-    vp_formats: {
-      ldp_vp: {
-        proof_type: [
-          "Ed25519Signature2018",
-          "Ed25519Signature2020",
-          "RsaSignature2018"
-        ]
-      },
-      "vc+sd-jwt": {
-        "sd-jwt_alg_values": [
-          "RS256",
-          "ES256",
-          "ES256K",
-          "EdDSA"
-        ],
-        "kb-jwt_alg_values": [
-          "RS256",
-          "ES256",
-          "ES256K",
-          "EdDSA"
-        ]
-      }
+  assert.equal(params.has("client_metadata"), false);
+});
+
+test("preserves verifier-supplied client metadata without synthesizing it", () => {
+  const clientMetadata = {
+    client_name: "Actual Verify instance",
+    vp_formats: { "vc+sd-jwt": { alg: ["ES256"] } }
+  };
+  const verifierResponse = {
+    requestId: "req-metadata",
+    authorizationDetails: {
+      clientId,
+      responseType: "vp_token",
+      responseMode: "direct_post",
+      nonce: "nonce",
+      responseUri: "https://verify.example/response",
+      presentationDefinition,
+      clientMetadata
     }
-  });
+  };
+
+  const params = new URL(
+    createAuthorizationRequestUri(verifierResponse, clientId)
+  ).searchParams;
+
+  assert.deepEqual(
+    JSON.parse(params.get("client_metadata")),
+    clientMetadata
+  );
+});
+
+test("preserves an explicit verifier state and falls back to requestId", () => {
+  const response = {
+    requestId: "req-correlation",
+    authorizationDetails: {
+      clientId,
+      responseType: "vp_token",
+      responseMode: "direct_post",
+      nonce: "nonce",
+      state: "verifier-state",
+      responseUri: "https://verify.example/response",
+      presentationDefinition
+    }
+  };
+
+  const params = new URL(
+    createAuthorizationRequestUri(response, clientId)
+  ).searchParams;
+
+  assert.equal(params.get("state"), "verifier-state");
+  delete response.authorizationDetails.state;
+  const fallbackParams = new URL(
+    createAuthorizationRequestUri(response, clientId)
+  ).searchParams;
+  assert.equal(fallbackParams.get("state"), "req-correlation");
 });
 
 test("uses a verifier-provided presentation definition URI by value", () => {
@@ -113,7 +139,6 @@ test("uses a verifier-provided presentation definition URI by value", () => {
 test("builds a by-reference QR URI from the verifier request URI", () => {
   const verifierResponse = {
     transactionId: "txn-reference",
-    requestId: "req-reference",
     requestUri:
       "https://verify.example/vp-request/req_reference?key=value"
   };
@@ -135,6 +160,20 @@ test("builds a by-reference QR URI from the verifier request URI", () => {
   assert.deepEqual(
     Array.from(params.keys()).sort(),
     ["client_id", "request_uri"]
+  );
+});
+
+test("rejects a verifier response that ambiguously includes both variants", () => {
+  assert.throws(
+    () => createAuthorizationRequestUri(
+      {
+        requestId: "req-ambiguous",
+        requestUri: "https://verify.example/request",
+        authorizationDetails: {}
+      },
+      clientId
+    ),
+    /either requestUri or authorizationDetails, not both/
   );
 });
 
@@ -215,4 +254,35 @@ test("rejects missing or invalid verifier request data", () => {
     ),
     /requestUri must be an absolute HTTP\(S\) URL/
   );
+});
+
+test("rejects wallet endpoints that use loopback or Docker-only addresses", () => {
+  const authorizationDetails = {
+    clientId,
+    responseType: "vp_token",
+    responseMode: "direct_post",
+    nonce: "nonce",
+    responseUri: "https://verify.example/response",
+    presentationDefinition
+  };
+
+  for (const responseUri of [
+    "http://localhost:8080/response",
+    "http://127.0.0.1:8080/response",
+    "http://host.docker.internal:8080/response"
+  ]) {
+    assert.throws(
+      () => createAuthorizationRequestUri(
+        {
+          requestId: "req-unreachable",
+          authorizationDetails: {
+            ...authorizationDetails,
+            responseUri
+          }
+        },
+        clientId
+      ),
+      /must use an address reachable by the mobile wallet/
+    );
+  }
 });

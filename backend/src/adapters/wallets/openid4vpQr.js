@@ -1,19 +1,5 @@
 const DEFAULT_PROTOCOL = "openid4vp://";
 
-const VP_FORMATS = {
-  ldp_vp: {
-    proof_type: [
-      "Ed25519Signature2018",
-      "Ed25519Signature2020",
-      "RsaSignature2018"
-    ]
-  },
-  "vc+sd-jwt": {
-    "sd-jwt_alg_values": ["RS256", "ES256", "ES256K", "EdDSA"],
-    "kb-jwt_alg_values": ["RS256", "ES256", "ES256K", "EdDSA"]
-  }
-};
-
 function requireString(value, fieldName) {
   if (typeof value !== "string" || !value.trim()) {
     throw new Error(`${fieldName} is required`);
@@ -44,6 +30,30 @@ function requireHttpUrl(value, fieldName) {
   return value;
 }
 
+function requireWalletReachableUrl(value, fieldName) {
+  requireHttpUrl(value, fieldName);
+
+  const hostname = new URL(value).hostname
+    .toLowerCase()
+    .replace(/^\[|\]$/g, "");
+  const isLoopbackAddress =
+    hostname === "localhost" ||
+    hostname.endsWith(".localhost") ||
+    hostname === "::1" ||
+    /^127(?:\.\d{1,3}){3}$/.test(hostname);
+
+  if (
+    isLoopbackAddress ||
+    hostname === "host.docker.internal"
+  ) {
+    throw new Error(
+      `${fieldName} must use an address reachable by the mobile wallet; loopback and Docker host addresses are not reachable from a separate device`
+    );
+  }
+
+  return value;
+}
+
 function createAuthorizationRequestUri(
   verifierResponse,
   clientId
@@ -58,16 +68,18 @@ function createAuthorizationRequestUri(
     throw new Error("Verifier response must be an object");
   }
 
-  const requestId = requireString(
-    verifierResponse.requestId,
-    "requestId"
-  );
   const params = new URLSearchParams();
 
   params.set("client_id", clientId);
 
   if (verifierResponse.requestUri !== undefined) {
-    const requestUri = requireHttpUrl(
+    if (verifierResponse.authorizationDetails !== undefined) {
+      throw new Error(
+        "Verifier response must include either requestUri or authorizationDetails, not both"
+      );
+    }
+
+    const requestUri = requireWalletReachableUrl(
       verifierResponse.requestUri,
       "requestUri"
     );
@@ -98,7 +110,20 @@ function createAuthorizationRequestUri(
       );
     }
 
-    params.set("state", requestId);
+    const requestId = requireString(
+      verifierResponse.requestId,
+      "requestId"
+    );
+
+    params.set(
+      "state",
+      authorizationDetails.state === undefined
+        ? requestId
+        : requireString(
+          authorizationDetails.state,
+          "authorizationDetails.state"
+        )
+    );
     params.set(
       "response_type",
       requireString(
@@ -122,7 +147,7 @@ function createAuthorizationRequestUri(
     );
     params.set(
       "response_uri",
-      requireHttpUrl(
+      requireWalletReachableUrl(
         authorizationDetails.responseUri,
         "authorizationDetails.responseUri"
       )
@@ -142,7 +167,7 @@ function createAuthorizationRequestUri(
     if (definitionUri !== undefined) {
       params.set(
         "presentation_definition_uri",
-        requireHttpUrl(
+        requireWalletReachableUrl(
           definitionUri,
           "authorizationDetails.presentationDefinitionUri"
         )
@@ -163,25 +188,24 @@ function createAuthorizationRequestUri(
     }
 
     const clientMetadata =
-      authorizationDetails.clientMetadata || {
-        client_name: clientId,
-        vp_formats: VP_FORMATS
-      };
+      authorizationDetails.clientMetadata;
 
-    if (
-      !clientMetadata ||
-      typeof clientMetadata !== "object" ||
-      Array.isArray(clientMetadata)
-    ) {
-      throw new Error(
-        "authorizationDetails.clientMetadata must be an object"
+    if (clientMetadata !== undefined) {
+      if (
+        !clientMetadata ||
+        typeof clientMetadata !== "object" ||
+        Array.isArray(clientMetadata)
+      ) {
+        throw new Error(
+          "authorizationDetails.clientMetadata must be an object"
+        );
+      }
+
+      params.set(
+        "client_metadata",
+        JSON.stringify(clientMetadata)
       );
     }
-
-    params.set(
-      "client_metadata",
-      JSON.stringify(clientMetadata)
-    );
   }
 
   return `${DEFAULT_PROTOCOL}authorize?${params.toString()}`;

@@ -58,6 +58,15 @@ async function createCredentialRequest(
 ) {
   const adapter = getWalletAdapter(walletId);
 
+  if (typeof adapter.createCredentialRequest !== "function") {
+    const error = new Error(
+      `Wallet ${walletId} does not support credential request creation`
+    );
+    error.code = "WALLET_OPERATION_UNSUPPORTED";
+    error.statusCode = 501;
+    throw error;
+  }
+
   return adapter.createCredentialRequest(data);
 }
 

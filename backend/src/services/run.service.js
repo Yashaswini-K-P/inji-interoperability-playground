@@ -63,7 +63,9 @@ function createRun(config) {
     exchanges: [],
     offer: null,
     token: null,
-    presentationRequest: null
+    presentationRequest: null,
+    verificationResult: null,
+    result: null
   };
 
   runs.set(runId, run);
@@ -90,6 +92,10 @@ function addExchange(runId, exchange) {
   };
 
   run.exchanges.push(recordedExchange);
+
+  if (recordedExchange.status === "FAILED") {
+    run.status = "FAILED";
+  }
 
   saveRuns();
 
@@ -161,7 +167,71 @@ function setRunPresentationRequest(
     protocol: run.scenario.presentationProtocol || "openid4vp",
     createdAt: new Date().toISOString(),
     clientId,
+    requestId:
+      typeof presentationRequest.requestId === "string"
+        ? presentationRequest.requestId
+        : null,
+    transactionId:
+      typeof presentationRequest.transactionId === "string"
+        ? presentationRequest.transactionId
+        : null,
     authorizationRequest: presentationRequest
+  };
+
+  saveRuns();
+
+  return run;
+}
+
+function setRunVerificationResult(
+  runId,
+  { transactionId, allChecksSuccessful, credentialCount }
+) {
+  const run = runs.get(runId);
+
+  if (!run) {
+    throw new Error(`Run not found: ${runId}`);
+  }
+
+  if (
+    typeof transactionId !== "string" ||
+    typeof allChecksSuccessful !== "boolean" ||
+    !Number.isInteger(credentialCount) ||
+    credentialCount < 0
+  ) {
+    throw new Error("A valid authoritative verification summary is required");
+  }
+
+  run.verificationResult = {
+    transactionId,
+    allChecksSuccessful,
+    credentialCount,
+    retrievedAt: new Date().toISOString()
+  };
+  run.status = allChecksSuccessful ? "COMPLETED" : "FAILED";
+  run.result = allChecksSuccessful ? "PASS" : "FAIL";
+
+  saveRuns();
+
+  return run;
+}
+
+function setRunVerificationFailure(runId, errorCode) {
+  const run = runs.get(runId);
+
+  if (!run) {
+    throw new Error(`Run not found: ${runId}`);
+  }
+
+  if (typeof errorCode !== "string" || !errorCode.trim()) {
+    throw new Error("A verifier failure code is required");
+  }
+
+  run.status = "FAILED";
+  run.result = "FAIL";
+  run.verificationFailure = {
+    code: errorCode,
+    recordedAt: new Date().toISOString()
   };
 
   saveRuns();
@@ -176,5 +246,7 @@ module.exports = {
   updateRunStatus,
   setRunOffer,
   setRunToken,
-  setRunPresentationRequest
+  setRunPresentationRequest,
+  setRunVerificationResult,
+  setRunVerificationFailure
 };

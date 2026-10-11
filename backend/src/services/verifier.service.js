@@ -40,6 +40,24 @@ async function createPresentationRequest(
   return adapter.createPresentationRequest(data);
 }
 
+async function getPresentationResult(
+  verifierId,
+  data
+) {
+  const adapter = getVerifierAdapter(verifierId);
+
+  if (typeof adapter.getPresentationResult !== "function") {
+    const error = new Error(
+      `Verifier ${verifierId} does not support result retrieval`
+    );
+    error.code = "VERIFIER_OPERATION_UNSUPPORTED";
+    error.statusCode = 501;
+    throw error;
+  }
+
+  return adapter.getPresentationResult(data);
+}
+
 function getVerifierClientId(verifierId) {
   const adapter = getVerifierAdapter(verifierId);
   const clientId = adapter.getInfo().clientId;
@@ -60,5 +78,6 @@ module.exports = {
   getVerifierAdapter,
   getVerifierInfo,
   getVerifierClientId,
-  createPresentationRequest
+  createPresentationRequest,
+  getPresentationResult
 };

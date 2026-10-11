@@ -152,11 +152,12 @@ router.post("/runs/:runId/presentation", (req, res) => {
     const exchange = addExchange(
       req.params.runId,
       {
-        stepName: "Wallet Presentation Handoff",
+        stepName: "Authorization URI Generation",
         protocol: run.scenario.presentationProtocol || "openid4vp",
         direction: "playground-to-wallet",
         status: "READY",
-        qrUri: continuation.qrUri,
+        initiatedBy: "playground",
+        externalAction: "wallet-scan-not-observed",
         handoffMethod: continuation.handoffMethod,
         durationMs,
         error: null
@@ -175,10 +176,12 @@ router.post("/runs/:runId/presentation", (req, res) => {
       const exchange = addExchange(
         req.params.runId,
         {
-          stepName: "Wallet Presentation Handoff",
+          stepName: "Authorization URI Generation",
           protocol: run.scenario.presentationProtocol || "openid4vp",
           direction: "playground-to-wallet",
           status: "FAILED",
+          initiatedBy: "playground",
+          externalAction: "wallet-scan-not-observed",
           durationMs,
           error: error.message
         }

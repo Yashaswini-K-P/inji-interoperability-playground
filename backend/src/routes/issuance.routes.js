@@ -464,15 +464,17 @@ router.post(
           direction: "wallet-to-issuer",
           status: "FAILED",
           durationMs,
-          error:
-            error.response?.data ||
-            error.message
+          error: error.message,
+          diagnostic: {
+            code: error.code || null,
+            upstreamStatus: error.response?.status || null
+          }
         }
       );
 
-      res.status(502).json({
+      res.status(error.statusCode || 502).json({
         success: false,
-        error: "Credential request failed",
+        error: error.message,
         exchange
       });
     }

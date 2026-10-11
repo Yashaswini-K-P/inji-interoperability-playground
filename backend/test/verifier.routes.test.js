@@ -169,6 +169,20 @@ test("rejects a request client ID that differs from configuration", async () => 
   assert.equal(body.exchange.status, "FAILED");
 });
 
+test("rejects a blank client ID supplied in the request body", async () => {
+  resetRun();
+  configuredClientId = "did:web:verify.example";
+
+  const response = await createRequest({
+    clientId: ""
+  });
+  const body = await response.json();
+
+  assert.equal(response.status, 400);
+  assert.match(body.error, /must match the configured/);
+  assert.equal(createRequestCalls.length, 0);
+});
+
 test("uses and persists the configured client ID unchanged", async () => {
   resetRun();
   configuredClientId = "did:web:verify.example";

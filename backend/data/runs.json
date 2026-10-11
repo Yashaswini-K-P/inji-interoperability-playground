@@ -162,6 +162,16 @@
         "status": "SUCCESS",
         "durationMs": 142,
         "error": null
+      },
+      {
+        "step": 7,
+        "timestamp": "2026-10-10T07:48:48.132Z",
+        "stepName": "Presentation Request",
+        "protocol": "openid4vp",
+        "direction": "playground-to-verifier",
+        "status": "FAILED",
+        "durationMs": 1,
+        "error": "INJI_VERIFY_CLIENT_ID must be configured with the verifier client ID accepted by the selected wallet"
       }
     ],
     "offer": null,
@@ -234,6 +244,65 @@
           "issuedAt": 1791606842006
         },
         "expiresAt": 1791607142000
+      }
+    }
+  },
+  "RUN-C2EC55": {
+    "runId": "RUN-C2EC55",
+    "status": "IN_PROGRESS",
+    "createdAt": "2026-10-10T08:20:19.118Z",
+    "scenario": {
+      "issuer": "inji-certify",
+      "credential": "farmer-id",
+      "issuanceFlow": "authorization_code",
+      "wallet": "inji-mobile",
+      "verifier": "inji-verify",
+      "presentationProtocol": "openid4vp"
+    },
+    "exchanges": [
+      {
+        "step": 1,
+        "timestamp": "2026-10-10T08:20:26.178Z",
+        "stepName": "Presentation Request",
+        "protocol": "openid4vp",
+        "direction": "playground-to-verifier",
+        "status": "SUCCESS",
+        "durationMs": 65,
+        "error": null
+      }
+    ],
+    "offer": null,
+    "token": null,
+    "presentationRequest": {
+      "verifierId": "inji-verify",
+      "protocol": "openid4vp",
+      "createdAt": "2026-10-10T08:20:26.177Z",
+      "clientId": "client123",
+      "authorizationRequest": {
+        "transactionId": "txn_574d993f-00c1-46c3-8c8c-3bd11779f388",
+        "requestId": "req_a086527c-3432-4aad-a3be-a7e572dbbb82",
+        "authorizationDetails": {
+          "clientId": "client123",
+          "presentationDefinition": {
+            "id": "farmer-credential-request",
+            "input_descriptors": [
+              {
+                "id": "farmer-credential",
+                "format": {
+                  "ldp_vc": {}
+                }
+              }
+            ]
+          },
+          "nonce": "4eed20153fb8e10c27c287bc8fd64a10",
+          "responseUri": "https://plug-slashed-backhand.ngrok-free.dev/v1/verify/vp-submission/direct-post",
+          "acceptVPWithoutHolderProof": false,
+          "responseCodeValidationRequired": false,
+          "responseType": "vp_token",
+          "responseMode": "direct_post",
+          "issuedAt": 1791620426151
+        },
+        "expiresAt": 1791620726151
       }
     }
   }

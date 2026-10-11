@@ -12,7 +12,12 @@ class InjiMobileAdapter {
       id: this.config.id,
       name: this.config.name,
       platforms: this.config.platforms,
-      protocols: this.config.protocols
+      protocols: this.config.protocols,
+      capabilities: {
+        createCredentialOfferContinuation: true,
+        createPresentationRequestContinuation: true,
+        createCredentialRequest: false
+      }
     };
   }
 
