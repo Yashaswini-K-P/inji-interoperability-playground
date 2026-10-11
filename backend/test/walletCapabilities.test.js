@@ -34,7 +34,7 @@ test("prepares the Certify offer URI as the Inji Mobile QR payload", () => {
     continuation.externalAction,
     "wallet-scan-not-observed"
   );
-  assert.equal(continuation.status, "READY");
+  assert.equal(continuation.status, "PENDING_EXTERNAL_ACTION");
 });
 
 test("returns an explicit unsupported-operation error for credential creation", async () => {

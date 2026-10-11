@@ -73,11 +73,13 @@ test("reports prepared wallet actions as pending and leaves outcomes unconfirmed
     exchanges: [
       {
         stepName: "Wallet Handoff",
-        status: "READY"
+        status: "PENDING_EXTERNAL_ACTION",
+        handoffStatus: "PREPARED"
       },
       {
         stepName: "Authorization URI Generation",
-        status: "READY"
+        status: "PENDING_EXTERNAL_ACTION",
+        handoffStatus: "PREPARED"
       }
     ]
   }, readiness);

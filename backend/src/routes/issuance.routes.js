@@ -493,6 +493,7 @@ router.post(
 router.post(
   "/runs/:runId/credential",
   (req, res) => {
+    const startTime = Date.now();
     const run = getRun(req.params.runId);
 
     if (!run) {
@@ -503,15 +504,62 @@ router.post(
       });
     }
 
+    const walletId = run.scenario?.wallet;
+
+    if (!walletId) {
+      return res.status(409).json({
+        success: false,
+        error: "No wallet is selected for this run",
+        errorCode: "WALLET_NOT_SELECTED"
+      });
+    }
+
+    const continuation = {
+      method: "GET",
+      endpoint:
+        `/api/wallet/runs/${encodeURIComponent(run.runId)}/continue`,
+      requiredState: "CREDENTIAL_OFFER_CREATED",
+      status: "PENDING_EXTERNAL_ACTION",
+      actionRequiredCode: "SCAN_CREDENTIAL_OFFER_IN_INJI_MOBILE"
+    };
+
+    let exchange;
+
+    try {
+      exchange = addExchange(
+        req.params.runId,
+        {
+          stepName: "Credential Request",
+          protocol: "OpenID4VCI",
+          direction: "playground-to-wallet",
+          componentId: walletId,
+          status: "UNSUPPORTED",
+          durationMs: Date.now() - startTime,
+          format: run.scenario?.format || null,
+          error: "The selected wallet adapter does not create credential requests",
+          diagnostic: {
+            code: "CREDENTIAL_REQUEST_UNSUPPORTED",
+            owner: "selected-wallet",
+            action:
+              "Continue issuance in the selected wallet using the prepared credential offer"
+          }
+        }
+      );
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        error: "The Playground could not record the unsupported wallet operation",
+        errorCode: "EXCHANGE_RECORDING_FAILED"
+      });
+    }
+
     return res.status(501).json({
       success: false,
-      error: "The Playground does not create wallet credential requests",
+      error: "The selected wallet adapter does not create credential requests",
       errorCode: "CREDENTIAL_REQUEST_UNSUPPORTED",
-      diagnostic: {
-        owner: "selected-wallet",
-        action:
-          "Continue issuance in the selected wallet using the credential offer handoff"
-      }
+      diagnostic: exchange.diagnostic,
+      continuation,
+      exchange
     });
   }
 );

@@ -155,7 +155,9 @@ test("returns the unchanged verifier response and QR URI without recording it in
       handoffMethod: "cross-device-qr",
       verifierResponse: response,
       qrUri,
-      status: "READY"
+      handoffStatus: "PREPARED",
+      externalAction: "wallet-scan-not-observed",
+      status: "PENDING_EXTERNAL_ACTION"
     };
   };
 
@@ -169,8 +171,9 @@ test("returns the unchanged verifier response and QR URI without recording it in
   assert.deepEqual(body.wallet.verifierResponse, verifierResponse);
   assert.equal(body.wallet.qrUri, qrUri);
   assert.equal(body.wallet.handoffMethod, "cross-device-qr");
-  assert.equal(body.wallet.status, "READY");
-  assert.equal(body.exchange.status, "READY");
+  assert.equal(body.wallet.status, "PENDING_EXTERNAL_ACTION");
+  assert.equal(body.exchange.status, "PENDING_EXTERNAL_ACTION");
+  assert.equal(body.wallet.handoffStatus, "PREPARED");
   assert.equal(
     body.exchange.stepName,
     "Authorization URI Generation"
@@ -197,7 +200,7 @@ test("prepares an offer handoff without claiming wallet scan or credential recei
       qrPayload: receivedOfferUri,
       credentialOfferUri: receivedOfferUri,
       type: "openid-credential-offer",
-      status: "READY"
+      status: "PENDING_EXTERNAL_ACTION"
     };
   };
 
@@ -212,8 +215,8 @@ test("prepares an offer handoff without claiming wallet scan or credential recei
   assert.equal(body.wallet.qrPayload, offerUri);
   assert.equal(body.wallet.credentialOfferUri, offerUri);
   assert.equal(body.wallet.handoffStatus, "PREPARED");
-  assert.equal(body.wallet.status, "READY");
-  assert.equal(body.exchange.status, "READY");
+  assert.equal(body.wallet.status, "PENDING_EXTERNAL_ACTION");
+  assert.equal(body.exchange.status, "PENDING_EXTERNAL_ACTION");
   assert.equal(
     body.exchange.externalAction,
     "wallet-scan-not-observed"

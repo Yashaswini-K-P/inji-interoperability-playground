@@ -21,12 +21,17 @@ let offerCalls;
 let offerResult;
 let tokenResponse;
 let tokenError;
+let exchangeRecordingError;
 let server;
 let baseUrl;
 
 const runServiceMock = {
   getRun: () => currentRun,
   addExchange: (runId, exchange) => {
+    if (exchangeRecordingError) {
+      throw exchangeRecordingError;
+    }
+
     const recordedExchange = {
       step: (currentRun.exchanges?.length || 0) + 1,
       timestamp: new Date().toISOString(),
@@ -160,6 +165,7 @@ function resetRun() {
     }
   };
   tokenError = null;
+  exchangeRecordingError = null;
   tokenResponse = {
     access_token: accessTokenValue,
     refresh_token: refreshTokenValue,
@@ -282,7 +288,7 @@ test("records malformed token responses as failed without exposing token values"
   assert.equal(currentRun.status, "FAILED");
 });
 
-test("rejects unsupported credential requests without changing run history", async () => {
+test("records unsupported wallet credential requests and returns a safe continuation", async () => {
   resetRun();
 
   const response = await fetch(
@@ -290,17 +296,48 @@ test("rejects unsupported credential requests without changing run history", asy
     { method: "POST" }
   );
   const body = await response.json();
+  const exchange = exchanges[0];
 
   assert.equal(response.status, 501);
   assert.equal(body.errorCode, "CREDENTIAL_REQUEST_UNSUPPORTED");
+  assert.equal(body.diagnostic.code, "CREDENTIAL_REQUEST_UNSUPPORTED");
   assert.equal(body.diagnostic.owner, "selected-wallet");
+  assert.deepEqual(body.continuation, {
+    method: "GET",
+    endpoint: "/api/wallet/runs/RUN-TOKEN-TEST/continue",
+    requiredState: "CREDENTIAL_OFFER_CREATED",
+    status: "PENDING_EXTERNAL_ACTION",
+    actionRequiredCode: "SCAN_CREDENTIAL_OFFER_IN_INJI_MOBILE"
+  });
+  assert.equal(exchange.status, "UNSUPPORTED");
+  assert.equal(exchange.componentId, "inji-mobile");
+  assert.equal(exchange.protocol, "OpenID4VCI");
+  assert.equal(exchange.format, null);
+  assert.equal(typeof exchange.timestamp, "string");
+  assert.equal(exchange.diagnostic.code, "CREDENTIAL_REQUEST_UNSUPPORTED");
   assert.equal(Object.hasOwn(currentRun, "token"), false);
   assert.equal(requestTokenCalls.length, 0);
-  assert.equal(exchanges.length, 0);
+  assert.equal(exchanges.length, 1);
   assert.equal(requestCredentialCalls.length, 0);
   assert.equal(walletCredentialRequestCalls.length, 0);
   assert.equal(currentRun.status, "IN_PROGRESS");
-  assert.equal(currentRun.exchanges.length, 1);
+  assert.equal(currentRun.exchanges.length, 2);
+});
+
+test("returns a safe error when an unsupported wallet operation cannot be recorded", async () => {
+  resetRun();
+  exchangeRecordingError = new Error("storage failure");
+
+  const response = await fetch(
+    `${baseUrl}/api/issuance/runs/RUN-TOKEN-TEST/credential`,
+    { method: "POST" }
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 500);
+  assert.equal(body.errorCode, "EXCHANGE_RECORDING_FAILED");
+  assert.equal(exchanges.length, 0);
+  assert.equal(currentRun.status, "IN_PROGRESS");
 });
 
 test("stores and reports only a Certify-created offer URI", async () => {

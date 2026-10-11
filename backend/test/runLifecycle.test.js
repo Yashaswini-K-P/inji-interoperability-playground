@@ -71,13 +71,15 @@ test("keeps prepared wallet handoffs in progress and marks failed steps failed",
     stepName: "Wallet Handoff",
     protocol: "OpenID4VCI",
     direction: "playground-to-wallet",
-    status: "READY"
+    status: "PENDING_EXTERNAL_ACTION",
+    handoffStatus: "PREPARED"
   });
 
   assert.equal(readyStep.timestamp.length > 0, true);
   assert.equal(readyStep.runId, run.runId);
   assert.equal(readyStep.componentId, "inji-mobile");
   assert.equal(readyStep.protocolStep, "Wallet Handoff");
+  assert.equal(readyStep.status, "PENDING_EXTERNAL_ACTION");
   assert.equal(runService.getRun(run.runId).status, "IN_PROGRESS");
   assert.equal(runService.getRun(run.runId).exchanges.length, 1);
 

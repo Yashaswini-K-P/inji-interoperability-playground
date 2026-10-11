@@ -93,7 +93,10 @@ function preparedActionStatus(exchange) {
     return "NOT_PREPARED";
   }
 
-  if (exchange.status === "READY") {
+  if (
+    exchange.status === "READY" ||
+    exchange.status === "PENDING_EXTERNAL_ACTION"
+  ) {
     return "PREPARED";
   }
 

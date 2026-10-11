@@ -36,7 +36,7 @@ class InjiMobileAdapter {
       type: "openid-credential-offer",
       handoffStatus: "PREPARED",
       externalAction: "wallet-scan-not-observed",
-      status: "READY"
+      status: "PENDING_EXTERNAL_ACTION"
     };
   }
 
@@ -54,7 +54,9 @@ class InjiMobileAdapter {
         verifierResponse,
         clientId
       ),
-      status: "READY"
+      handoffStatus: "PREPARED",
+      externalAction: "wallet-scan-not-observed",
+      status: "PENDING_EXTERNAL_ACTION"
     };
   }
 }
