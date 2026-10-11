@@ -112,6 +112,27 @@ test("does not expose the persisted access token in run details", async () => {
   assert.equal(storedRun.token.access_token, "sensitive-access-token");
 });
 
+test("returns safe lifecycle diagnostics without implying external success", async () => {
+  const response = await fetch(
+    `${baseUrl}/api/runs/RUN-SECRET-TEST/diagnostics`
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.diagnostics.runId, storedRun.runId);
+  assert.equal(body.diagnostics.connectivity.status, "NOT_CHECKED");
+  assert.equal(body.diagnostics.outcome.status, "UNCONFIRMED");
+  assert.equal(body.diagnostics.issuance.credential, "NOT_CONFIRMED");
+  assert.equal(
+    JSON.stringify(body).includes("sensitive-access-token"),
+    false
+  );
+  assert.equal(
+    JSON.stringify(body).includes("sensitive-refresh-token"),
+    false
+  );
+});
+
 test("rejects caller-authored exchange events that could fake protocol success", async () => {
   const response = await fetch(
     `${baseUrl}/api/runs/RUN-SECRET-TEST/exchanges`,

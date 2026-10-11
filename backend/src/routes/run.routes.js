@@ -5,6 +5,9 @@ const {
   listRuns,
   createRun
 } = require("../services/run.service");
+const {
+  createRunDiagnostics
+} = require("../services/runDiagnostics.service");
 
 const router = express.Router();
 
@@ -80,6 +83,22 @@ router.get("/:runId", (req, res) => {
   res.json({
     success: true,
     run: publicRun
+  });
+});
+
+router.get("/:runId/diagnostics", (req, res) => {
+  const run = getRun(req.params.runId);
+
+  if (!run) {
+    return res.status(404).json({
+      success: false,
+      error: "Run not found"
+    });
+  }
+
+  res.json({
+    success: true,
+    diagnostics: createRunDiagnostics(run)
   });
 });
 
