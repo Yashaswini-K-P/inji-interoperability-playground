@@ -62,12 +62,30 @@ async function apiRequest(
 
   if (!response.ok) {
     const body = asObject(data);
-    const message =
-      typeof body.message === "string"
-        ? body.message
-        : `Request failed with HTTP ${response.status}`;
+    const diagnostic = asObject(body.diagnostic);
+    const upstreamDetails = asObject(diagnostic.upstreamDetails);
 
-    throw new Error(message);
+    // Prefer the verifier's actual response (for example UNKNOWN_FIELD)
+    // over the adapter's generic Axios message (for example HTTP 400).
+    const message =
+      (typeof upstreamDetails.errorMessage === "string" &&
+        upstreamDetails.errorMessage) ||
+      (typeof upstreamDetails.message === "string" &&
+        upstreamDetails.message) ||
+      (typeof body.message === "string" && body.message) ||
+      (typeof body.error === "string" && body.error) ||
+      (typeof body.details === "string" && body.details) ||
+      (typeof body.error_description === "string" &&
+        body.error_description) ||
+      `Request failed with HTTP ${response.status}`;
+
+    const errorCode =
+      (typeof upstreamDetails.errorCode === "string" &&
+        upstreamDetails.errorCode) ||
+      (typeof diagnostic.code === "string" && diagnostic.code) ||
+      "";
+
+    throw new Error(errorCode ? `${message} (${errorCode})` : message);
   }
 
   return data;
@@ -119,6 +137,14 @@ function findArray(value: unknown): unknown[] {
   return [];
 }
 
+function getBackendWalletId(walletId: string): string {
+  // The UI distinguishes mobile platforms, while the backend registry uses
+  // the component IDs "inji-mobile" and "inji-web".
+  if (walletId === "inji-web") return "inji-web";
+  if (walletId.startsWith("inji-mobile")) return "inji-mobile";
+  return walletId;
+}
+
 function normalizeStatus(value: unknown): TestStatus {
   if (typeof value !== "string") return "UNKNOWN";
 
@@ -146,11 +172,13 @@ function normalizeStatus(value: unknown): TestStatus {
 }
 
 function getQrPayload(value: unknown): string | undefined {
-  return findString(value, [
+  const qrKeys = [
     "credentialOfferUri",
     "credential_offer_uri",
     "offerUri",
     "offer_uri",
+    "qrUri",
+    "qr_uri",
     "qrPayload",
     "qr_payload",
     "presentationUri",
@@ -158,7 +186,32 @@ function getQrPayload(value: unknown): string | undefined {
     "requestUri",
     "request_uri",
     "uri",
-  ]);
+  ];
+
+  // First check the current object. The wallet presentation response uses
+  // wallet.qrUri, while issuer and verifier responses may use other keys.
+  const directMatch = findString(value, qrKeys);
+  if (directMatch) return directMatch;
+
+  const object = asObject(value);
+  const nestedFields = [
+    "wallet",
+    "presentationRequest",
+    "authorizationRequest",
+    "verifierResponse",
+    "data",
+    "result",
+  ];
+
+  for (const field of nestedFields) {
+    const nestedValue = object[field];
+    if (nestedValue && typeof nestedValue === "object") {
+      const nestedMatch = getQrPayload(nestedValue);
+      if (nestedMatch) return nestedMatch;
+    }
+  }
+
+  return undefined;
 }
 
 function StatusBadge({ status }: { status: TestStatus }) {
@@ -222,9 +275,9 @@ export default function App() {
   const [verifier, setVerifier] = useState("inji-verify");
   const [credentialId, setCredentialId] = useState("");
   const [credentialFormat, setCredentialFormat] =
-    useState("W3C VC JSON-LD");
+    useState("ldp_vc");
   const [issuanceFlow, setIssuanceFlow] =
-    useState("PRE_AUTHORIZED_CODE");
+    useState("pre_authorized_code");
 
   const [runId, setRunId] = useState("");
   const [runData, setRunData] = useState<unknown>(null);
@@ -242,16 +295,19 @@ export default function App() {
   const [resultStatus, setResultStatus] = useState<TestStatus>("UNKNOWN");
   const [activeTab, setActiveTab] = useState("Dashboard");
 
-  const [presentationDefinition, setPresentationDefinition] = useState(
+  // This editor contains a DCQL query for the Inji Verify OpenID4VP v2 API.
+  // The chosen format and credential types must match the credential and wallet.
+  const [dcqlQueryText, setDcqlQueryText] = useState(
     JSON.stringify(
       {
-        id: "credential-verification",
-        input_descriptors: [
+        credentials: [
           {
             id: "requested-credential",
-            constraints: {
-              fields: [{ path: ["$.type"] }],
+            format: "ldp_vc",
+            meta: {
+              type_values: [["VerifiableCredential"]],
             },
+            require_cryptographic_holder_binding: true,
           },
         ],
       },
@@ -261,82 +317,77 @@ export default function App() {
   );
 
   async function refreshRegistry() {
-  setError("");
-  setNotice("");
+    setError("");
+    setNotice("");
 
-  // First, check the core backend endpoints.
-  try {
-    await apiRequest("/api/health");
+    // Check the core backend independently of the issuer service.
+    try {
+      await apiRequest("/api/health");
 
-    const [componentData, scenarioData] = await Promise.all([
-      apiRequest("/api/components"),
-      apiRequest("/api/scenarios"),
-    ]);
+      const [componentData, scenarioData] = await Promise.all([
+        apiRequest("/api/components"),
+        apiRequest("/api/scenarios"),
+      ]);
 
-    setBackendStatus("connected");
-    setComponents(componentData);
-    setScenarios(scenarioData);
-  } catch (err) {
-    setBackendStatus("offline");
+      setBackendStatus("connected");
+      setComponents(componentData);
+      setScenarios(scenarioData);
+    } catch (err) {
+      setBackendStatus("offline");
+      setError(
+        `Unable to load backend data: ${
+          err instanceof Error ? err.message : "Unknown error"
+        }`,
+      );
+      return;
+    }
 
-    setError(
-      `Unable to load backend data: ${
-        err instanceof Error ? err.message : "Unknown error"
-      }`,
-    );
+    // An unavailable issuer should not mark the core backend as offline.
+    try {
+      const credentialData = await apiRequest(
+        "/api/issuers/inji-certify/credentials",
+      );
 
-    return;
-  }
+      const credentialItems = findArray(credentialData).map(
+        (item, index): CredentialOption => {
+          const id =
+            findString(item, [
+              "id",
+              "credentialType",
+              "credential_type",
+              "configurationId",
+              "credentialConfigurationId",
+              "type",
+            ]) || `credential-${index + 1}`;
 
-  // Load issuer credentials separately.
-  // If the issuer is unavailable, keep the dashboard running.
-  try {
-    const credentialData = await apiRequest(
-      "/api/issuers/inji-certify/credentials",
-    );
+          const label =
+            findString(item, [
+              "displayName",
+              "name",
+              "credentialType",
+              "type",
+            ]) || id;
 
-    const credentialItems = findArray(credentialData).map(
-      (item, index): CredentialOption => {
-        const id =
-          findString(item, [
-            "id",
-            "credentialType",
-            "credential_type",
-            "configurationId",
-            "credentialConfigurationId",
-            "type",
-          ]) || `credential-${index + 1}`;
+          return { id, label };
+        },
+      );
 
-        const label =
-          findString(item, [
-            "displayName",
-            "name",
-            "credentialType",
-            "type",
-          ]) || id;
+      setCredentials(credentialItems);
 
-        return { id, label };
-      },
-    );
-
-    setCredentials(credentialItems);
-
-    if (credentialItems.length > 0) {
-      setCredentialId(
-        (current) => current || credentialItems[0].id,
+      if (credentialItems.length > 0) {
+        setCredentialId((current) => current || credentialItems[0].id);
+      }
+    } catch (err) {
+      setCredentials([]);
+      setNotice(
+        `Backend connected, but issuer credentials could not be loaded. ` +
+          `The issuer service may be unavailable. ${
+            err instanceof Error ? err.message : ""
+          }`,
       );
     }
-  } catch (err) {
-    setCredentials([]);
-
-    setNotice(
-      `Backend connected, but issuer credentials could not be loaded. ` +
-        `The issuer service may be unavailable. ${
-          err instanceof Error ? err.message : ""
-        }`,
-    );
   }
-}
+
   useEffect(() => {
     void refreshRegistry();
   }, []);
@@ -344,15 +395,23 @@ export default function App() {
   async function refreshRun(id = runId) {
     if (!id) return;
 
-    const data = await apiRequest(
+    const response = await apiRequest(
       `/api/runs/${encodeURIComponent(id)}`,
     );
 
-    setRunData(data);
-    setSelectedPayload(data);
+    const responseObject = asObject(response);
+    const run = responseObject.run ?? response;
+
+    setRunData(run);
+    setSelectedPayload(response);
   }
 
   async function startRun() {
+    if (!credentialId) {
+      setError("Select a credential type before creating a test run.");
+      return;
+    }
+
     setBusy("run");
     setError("");
     setNotice("");
@@ -368,35 +427,33 @@ export default function App() {
     setResultStatus("UNKNOWN");
 
     try {
-      /*
-       * Confirm these request field names against your friend's
-       * POST /api/runs implementation before relying on them.
-       */
+      // These property names match the existing POST /api/runs route.
       const response = await apiRequest("/api/runs", {
         method: "POST",
         body: JSON.stringify({
-          issuerId: issuer,
-          walletId: wallet,
-          verifierId: verifier,
-          credentialType: credentialId,
-          credentialFormat,
+          issuer,
+          credential: credentialId,
+          format: credentialFormat,
           issuanceFlow,
-          presentationProtocol: "OPENID4VP",
+          wallet: getBackendWalletId(wallet),
+          verifier,
+          presentationProtocol: "openid4vp",
         }),
       });
 
       setSelectedPayload(response);
 
       const responseObject = asObject(response);
-      const responseData = asObject(responseObject.data);
+      const createdRun = asObject(responseObject.run ?? responseObject.data);
 
       const id =
-        findString(response, ["runId", "run_id", "id"]) ||
-        findString(responseData, ["runId", "run_id", "id"]);
+        findString(createdRun, ["runId", "run_id", "id"]) ||
+        findString(responseObject, ["runId", "run_id", "id"]);
 
       if (!id) {
         setError(
-          "The backend response did not contain a recognizable run ID. Inspect the Run response in the Protocol Inspector.",
+          "The backend did not return a recognizable run ID. " +
+            "Select Run response in the Protocol Inspector to inspect it.",
         );
         return;
       }
@@ -408,7 +465,7 @@ export default function App() {
         await refreshRun(id);
       } catch (err) {
         setError(
-          `The run was created, but its exchange history could not be loaded: ${
+          `The run was created, but its details could not be loaded: ${
             err instanceof Error ? err.message : "Unknown error"
           }`,
         );
@@ -425,42 +482,57 @@ export default function App() {
   }
 
   async function generateOffer() {
-    if (!runId) {
-      setError("Create a test run first.");
-      return;
-    }
-
-    setBusy("offer");
-    setError("");
-
-    try {
-      const data = await apiRequest(
-        `/api/issuance/runs/${encodeURIComponent(runId)}/pre-authorized-offer`,
-        { method: "POST" },
-      );
-
-      setOfferData(data);
-      setSelectedPayload(data);
-      setNotice(
-        "Credential offer generated. This does not confirm credential delivery.",
-      );
-
-      try {
-        await refreshRun();
-      } catch {
-        // Keep the successful offer response visible if history is unavailable.
-      }
-    } catch (err) {
-      setError(
-        `Offer generation failed: ${
-          err instanceof Error ? err.message : "Unknown error"
-        }`,
-      );
-    } finally {
-      setBusy("");
-    }
+  if (!runId) {
+    setError("Create a test run first.");
+    return;
   }
 
+  if (!credentialId) {
+    setError("Select a credential type first.");
+    return;
+  }
+
+  setBusy("offer");
+  setError("");
+  setNotice("");
+
+  try {
+    const data = await apiRequest(
+      `/api/issuance/runs/${encodeURIComponent(runId)}/pre-authorized-offer`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          issuerId: issuer,
+          credentialConfigurationId: credentialId,
+          claims: {},
+          expiresIn: 600,
+          txCode: "1234",
+        }),
+      },
+    );
+
+    setOfferData(data);
+    setSelectedPayload(data);
+
+    setNotice(
+      "Credential offer generated. This does not confirm credential delivery.",
+    );
+
+    try {
+      await refreshRun();
+    } catch {
+      // Keep the successful offer response visible.
+    }
+  } catch (err) {
+    setError(
+      `Offer generation failed: ${
+        err instanceof Error ? err.message : "Unknown error"
+      }`,
+    );
+  } finally {
+    setBusy("");
+  }
+}
   async function prepareIssuanceHandoff() {
     if (!runId) {
       setError("Create a test run first.");
@@ -469,6 +541,7 @@ export default function App() {
 
     setBusy("issuance");
     setError("");
+    setNotice("");
 
     try {
       const data = await apiRequest(
@@ -484,7 +557,7 @@ export default function App() {
       try {
         await refreshRun();
       } catch {
-        // Preserve the handoff response if exchange history is unavailable.
+        // Preserve the handoff response if history is unavailable.
       }
     } catch (err) {
       setError(
@@ -503,17 +576,31 @@ export default function App() {
       return;
     }
 
-    let definition: unknown;
+    let dcqlQuery: unknown;
 
     try {
-      definition = JSON.parse(presentationDefinition);
+      dcqlQuery = JSON.parse(dcqlQueryText);
     } catch {
-      setError("Presentation definition must contain valid JSON.");
+      setError("DCQL query must contain valid JSON.");
+      return;
+    }
+
+    const dcqlQueryObject = asObject(dcqlQuery);
+
+    if (
+      !Array.isArray(dcqlQueryObject.credentials) ||
+      dcqlQueryObject.credentials.length === 0
+    ) {
+      setError(
+        'DCQL query must contain a non-empty "credentials" array. ' +
+          'Do not use the old "input_descriptors" presentation-definition format.',
+      );
       return;
     }
 
     setBusy("verify");
     setError("");
+    setNotice("");
 
     try {
       const data = await apiRequest(
@@ -521,7 +608,7 @@ export default function App() {
         {
           method: "POST",
           body: JSON.stringify({
-            presentationDefinition: definition,
+            dcqlQuery,
           }),
         },
       );
@@ -556,13 +643,16 @@ export default function App() {
 
     setBusy("presentation");
     setError("");
+    setNotice("");
 
     try {
       const data = await apiRequest(
         `/api/wallet/runs/${encodeURIComponent(runId)}/presentation`,
         {
           method: "POST",
-          body: JSON.stringify({ walletId: wallet }),
+          body: JSON.stringify({
+            walletId: getBackendWalletId(wallet),
+          }),
         },
       );
 
@@ -596,6 +686,7 @@ export default function App() {
 
     setBusy("result");
     setError("");
+    setNotice("");
 
     try {
       const data = await apiRequest(
@@ -694,6 +785,7 @@ export default function App() {
           <div className="brand-mark">
             <ShieldCheck size={25} />
           </div>
+
           <div>
             <strong>INJI</strong>
             <span>INTEROPERABILITY PLAYGROUND</span>
@@ -931,8 +1023,8 @@ export default function App() {
                       setCredentialFormat(event.target.value)
                     }
                   >
-                    <option value="W3C VC JSON-LD">W3C VC JSON-LD</option>
-                    <option value="SD-JWT VC">SD-JWT VC</option>
+                    <option value="ldp_vc">W3C VC JSON-LD</option>
+                    <option value="sd_jwt_vc">SD-JWT VC</option>
                     <option value="mso_mdoc">mDoc / mDL</option>
                   </select>
                   <small>
@@ -946,10 +1038,10 @@ export default function App() {
                     value={issuanceFlow}
                     onChange={(event) => setIssuanceFlow(event.target.value)}
                   >
-                    <option value="PRE_AUTHORIZED_CODE">
+                    <option value="pre_authorized_code">
                       Pre-Authorized Code
                     </option>
-                    <option value="AUTHORIZATION_CODE">
+                    <option value="authorization_code">
                       Authorization Code
                     </option>
                   </select>
@@ -990,7 +1082,11 @@ export default function App() {
 
                 <button
                   className="primary-button"
-                  disabled={busy !== "" || backendStatus !== "connected"}
+                  disabled={
+                    busy !== "" ||
+                    backendStatus !== "connected" ||
+                    !credentialId
+                  }
                   onClick={() => void startRun()}
                 >
                   {busy === "run" ? (
@@ -1083,12 +1179,12 @@ export default function App() {
                 </p>
 
                 <label className="form-field">
-                  <span>Presentation definition (JSON)</span>
+                  <span>DCQL query (JSON)</span>
                   <textarea
                     className="definition-editor"
-                    value={presentationDefinition}
+                    value={dcqlQueryText}
                     onChange={(event) =>
-                      setPresentationDefinition(event.target.value)
+                      setDcqlQueryText(event.target.value)
                     }
                     spellCheck={false}
                   />
