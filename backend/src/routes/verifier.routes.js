@@ -5,27 +5,31 @@ const {
   addExchange,
   setRunPresentationRequest,
   setRunVerificationResult,
-  setRunVerificationFailure
+  setRunVerificationFailure,
 } = require("../services/run.service");
 
 const {
   createPresentationRequest,
   getVerifierClientId,
-  getPresentationResult
+  getPresentationResult,
 } = require("../services/verifier.service");
 
 const router = express.Router();
 
 const PENDING_RESULT_CODES = new Set([
   "NO_VP_SUBMISSION",
-  "RESPONSE_CODE_NOT_USED"
+  "RESPONSE_CODE_NOT_USED",
 ]);
+
 const REJECTED_PRESENTATION_CODES = new Set([
   "INVALID_VP_TOKEN",
   "TOKEN_MATCHING_FAILED",
-  "VP_WITHOUT_PROOF"
+  "VP_WITHOUT_PROOF",
 ]);
 
+/**
+ * Extract the error code returned by Inji Verify.
+ */
 function getVerifierErrorCode(error) {
   const responseData = error.response?.data;
 
@@ -36,28 +40,46 @@ function getVerifierErrorCode(error) {
   return null;
 }
 
+/**
+ * Extract the transaction ID and request ID.
+ */
 function getResultRequest(run) {
   const request = run.presentationRequest;
-  const response = request?.authorizationRequest;
+  const authorizationRequest = request?.authorizationRequest;
 
   return {
     transactionId:
-      request?.transactionId || response?.transactionId,
+      request?.transactionId ||
+      authorizationRequest?.transactionId ||
+      null,
+
     requestId:
-      request?.requestId || response?.requestId
+      request?.requestId ||
+      authorizationRequest?.requestId ||
+      null,
   };
 }
 
+/**
+ * Return a safe summary of the run.
+ */
 function getSafeRunSummary(run) {
+  if (!run) {
+    return null;
+  }
+
   return {
     runId: run.runId,
     status: run.status,
     result: run.result,
     verificationResult: run.verificationResult,
-    verificationFailure: run.verificationFailure
+    verificationFailure: run.verificationFailure,
   };
 }
 
+/**
+ * Validate the result returned by Inji Verify.
+ */
 function isValidVerificationResult(result, transactionId) {
   if (
     !result ||
@@ -70,153 +92,243 @@ function isValidVerificationResult(result, transactionId) {
   }
 
   const credentialResultsAreValid =
-    result.credentialResults.every((credentialResult) =>
-      credentialResult &&
-      typeof credentialResult === "object" &&
-      !Array.isArray(credentialResult) &&
-      typeof credentialResult.allChecksSuccessful === "boolean"
+    result.credentialResults.every(
+      (credentialResult) =>
+        credentialResult &&
+        typeof credentialResult === "object" &&
+        !Array.isArray(credentialResult) &&
+        typeof credentialResult.allChecksSuccessful === "boolean"
     );
 
-  return credentialResultsAreValid &&
+  return (
+    credentialResultsAreValid &&
     result.allChecksSuccessful ===
       result.credentialResults.every(
         (credentialResult) =>
           credentialResult.allChecksSuccessful
-      );
+      )
+  );
 }
 
+/**
+ * Create a presentation request using Inji Verify.
+ *
+ * POST /runs/:runId/request
+ */
 router.post("/runs/:runId/request", async (req, res) => {
   const startTime = Date.now();
+  const runId = req.params.runId;
+
+  // Diagnostic 1: confirm that the request reaches this route.
+  console.log("VERIFY ROUTE HIT", {
+    runId,
+    bodyKeys: Object.keys(req.body || {}),
+    hasDcqlQuery: Boolean(req.body?.dcqlQuery),
+    hasPresentationDefinition: Boolean(
+      req.body?.presentationDefinition
+    ),
+  });
 
   try {
-    const run = getRun(req.params.runId);
+    // Find the selected run.
+    const run = getRun(runId);
 
     if (!run) {
       return res.status(404).json({
         success: false,
-        error: `Run not found: ${req.params.runId}`
+        error: `Run not found: ${runId}`,
       });
     }
 
+    // Get the verifier associated with this run.
     const verifierId = run.scenario.verifier;
 
     if (!verifierId) {
       return res.status(400).json({
         success: false,
-        error: "No verifier selected for this run"
+        error: "No verifier selected for this run",
       });
     }
 
+    // Get the configured Inji Verify client ID.
     const clientId = getVerifierClientId(verifierId);
 
+    // Validate the client ID if the frontend supplied one.
     if (
-      Object.prototype.hasOwnProperty.call(req.body, "clientId") &&
+      Object.prototype.hasOwnProperty.call(
+        req.body || {},
+        "clientId"
+      ) &&
       req.body.clientId !== clientId
     ) {
       const error = new Error(
         "clientId must match the configured INJI_VERIFY_CLIENT_ID"
       );
+
       error.statusCode = 400;
+      error.code = "VERIFIER_CLIENT_ID_MISMATCH";
+
       throw error;
     }
 
-    const presentationDefinition =
-      req.body.presentationDefinition || {
-        id: "farmer-credential-request",
-        input_descriptors: [
-          {
-            id: "farmer-credential",
-            format: {
-              ldp_vc: {}
-            }
-          }
-        ]
-      };
+    // Read the DCQL query sent by the frontend.
+    const dcqlQuery = req.body?.dcqlQuery;
 
+    // Validate the DCQL query.
+    if (
+      !dcqlQuery ||
+      typeof dcqlQuery !== "object" ||
+      Array.isArray(dcqlQuery) ||
+      !Array.isArray(dcqlQuery.credentials) ||
+      dcqlQuery.credentials.length === 0
+    ) {
+      console.error("INVALID DCQL QUERY", {
+        runId,
+        receivedBodyKeys: Object.keys(req.body || {}),
+        hasDcqlQuery: Boolean(dcqlQuery),
+      });
+
+      return res.status(400).json({
+        success: false,
+        error:
+          "A valid dcqlQuery with a non-empty credentials array is required. Update the frontend to send dcqlQuery instead of presentationDefinition.",
+      });
+    }
+
+    // Diagnostic 2: confirm that the adapter will be called.
+    console.log("VERIFY ADAPTER CALL", {
+      runId,
+      verifierId,
+      clientId,
+      credentialQueryCount: dcqlQuery.credentials.length,
+    });
+
+    // Create the presentation request through the verifier service.
     const presentationRequest =
-      await createPresentationRequest(
-        verifierId,
-        {
-          clientId,
-          presentationDefinition
-        }
-      );
+      await createPresentationRequest(verifierId, {
+        clientId,
+        dcqlQuery,
+      });
 
+    // Save the request against the current run.
     setRunPresentationRequest(
-      req.params.runId,
+      runId,
       presentationRequest,
       clientId
     );
 
     const durationMs = Date.now() - startTime;
 
-    const exchange = addExchange(
-      req.params.runId,
-      {
-        stepName: "Presentation Request Creation",
-        protocol: run.scenario.presentationProtocol || "openid4vp",
-        direction: "playground-to-verifier",
-        status: "SUCCESS",
-        initiatedBy: "playground",
-        transactionId: presentationRequest.transactionId || null,
-        requestId: presentationRequest.requestId || null,
-        durationMs,
-        error: null
-      }
-    );
+    // Record the successful exchange.
+    const exchange = addExchange(runId, {
+      stepName: "Presentation Request Creation",
+      protocol: run.scenario.presentationProtocol || "openid4vp",
+      direction: "playground-to-verifier",
+      status: "SUCCESS",
+      initiatedBy: "playground",
 
-    res.json({
+      transactionId:
+        presentationRequest.transactionId ||
+        presentationRequest.authorizationRequest?.transactionId ||
+        null,
+
+      requestId:
+        presentationRequest.requestId ||
+        presentationRequest.authorizationRequest?.requestId ||
+        null,
+
+      durationMs,
+      error: null,
+    });
+
+    console.log("VERIFY REQUEST SUCCESS", {
+      runId,
+      durationMs,
+    });
+
+    return res.json({
       success: true,
       presentationRequest,
-      exchange
+      exchange,
     });
-    } catch (error) {
+  } catch (error) {
     const durationMs = Date.now() - startTime;
 
-    try {
-      const exchange = addExchange(
-        req.params.runId,
-        {
-          stepName: "Presentation Request Creation",
-          protocol: "openid4vp",
-          direction: "playground-to-verifier",
-          status: "FAILED",
-          initiatedBy: "playground",
-          durationMs,
-          error: error.message,
-          diagnostic: {
-            code: error.code || null,
-            upstreamStatus: error.response?.status || null
-          }
-        }
-      );
+    // Diagnostic 3: display the actual error.
+    console.error("VERIFY ROUTE ERROR", {
+      message: error.message,
+      code: error.code || null,
+      statusCode: error.statusCode || null,
+      upstreamStatus: error.response?.status || null,
+      upstreamDetails: error.response?.data || null,
+    });
 
-      res.status(error.statusCode || 502).json({
-        success: false,
+    let exchange = null;
+
+    // Attempt to record the failed exchange.
+    try {
+      exchange = addExchange(runId, {
+        stepName: "Presentation Request Creation",
+        protocol: "openid4vp",
+        direction: "playground-to-verifier",
+        status: "FAILED",
+        initiatedBy: "playground",
+        durationMs,
         error: error.message,
-        exchange
+
+        diagnostic: {
+          code: error.code || null,
+          upstreamStatus: error.response?.status || null,
+          upstreamDetails: error.response?.data || null,
+        },
       });
-    } catch (runError) {
-      res.status(500).json({
-        success: false,
-        error: error.message
+    } catch (recordError) {
+      console.error("FAILED TO RECORD VERIFY ERROR", {
+        message: recordError.message,
       });
     }
+
+    // Return an informative error to the frontend.
+    const statusCode =
+      error.statusCode ||
+      (error.response?.status ? 502 : 500);
+
+    return res.status(statusCode).json({
+      success: false,
+      error: error.message,
+
+      diagnostic: {
+        code: error.code || null,
+        upstreamStatus: error.response?.status || null,
+        upstreamDetails: error.response?.data || null,
+      },
+
+      ...(exchange ? { exchange } : {}),
+    });
   }
 });
 
+/**
+ * Retrieve the verification result from Inji Verify.
+ *
+ * GET /runs/:runId/result
+ */
 router.get("/runs/:runId/result", async (req, res) => {
   const startTime = Date.now();
-  const run = getRun(req.params.runId);
+  const runId = req.params.runId;
+
+  const run = getRun(runId);
 
   if (!run) {
     return res.status(404).json({
       success: false,
-      error: `Run not found: ${req.params.runId}`
+      error: `Run not found: ${runId}`,
     });
   }
 
+  // Retrieve the correlated transaction and request IDs.
   const { transactionId, requestId } = getResultRequest(run);
+
   const verifierId = run.presentationRequest?.verifierId;
 
   if (
@@ -228,7 +340,7 @@ router.get("/runs/:runId/result", async (req, res) => {
     return res.status(409).json({
       success: false,
       error:
-        "A correlated Verify transaction and request ID are required before retrieving a result"
+        "A correlated Verify transaction and request ID are required before retrieving a result",
     });
   }
 
@@ -239,50 +351,67 @@ router.get("/runs/:runId/result", async (req, res) => {
     initiatedBy: "playground",
     transactionId,
     requestId,
-    durationMs: 0
+    durationMs: 0,
   };
 
   try {
-    const result = await getPresentationResult(
-      verifierId,
-      { transactionId }
-    );
+    console.log("RETRIEVING VERIFICATION RESULT", {
+      runId,
+      transactionId,
+      requestId,
+    });
+
+    // Fetch the result from Inji Verify.
+    const result = await getPresentationResult(verifierId, {
+      transactionId,
+    });
+
     const durationMs = Date.now() - startTime;
 
+    // Validate the verification response.
     if (!isValidVerificationResult(result, transactionId)) {
-      const exchange = addExchange(req.params.runId, {
+      const exchange = addExchange(runId, {
         ...eventBase,
         status: "ERROR",
         durationMs,
         error: "Inji Verify returned an invalid result response",
-        diagnostic: { code: "INVALID_VERIFIER_RESULT" }
+
+        diagnostic: {
+          code: "INVALID_VERIFIER_RESULT",
+        },
       });
 
       return res.status(502).json({
         success: false,
         pending: true,
         error: "Inji Verify returned an invalid result response",
-        run: getSafeRunSummary(getRun(req.params.runId)),
-        exchange
+        run: getSafeRunSummary(getRun(runId)),
+        exchange,
       });
     }
 
-    const runWithResult = setRunVerificationResult(
-      req.params.runId,
-      {
-        transactionId,
-        allChecksSuccessful: result.allChecksSuccessful,
-        credentialCount: result.credentialResults.length
-      }
-    );
-    const resultStatus =
-      result.allChecksSuccessful ? "PASS" : "FAIL";
-    const exchange = addExchange(req.params.runId, {
+    // Save the verification result.
+    const runWithResult = setRunVerificationResult(runId, {
+      transactionId,
+      allChecksSuccessful: result.allChecksSuccessful,
+      credentialCount: result.credentialResults.length,
+    });
+
+    const resultStatus = result.allChecksSuccessful
+      ? "PASS"
+      : "FAIL";
+
+    const exchange = addExchange(runId, {
       ...eventBase,
       status: "SUCCESS",
       resultStatus,
       durationMs,
-      error: null
+      error: null,
+    });
+
+    console.log("VERIFICATION RESULT RECEIVED", {
+      runId,
+      result: resultStatus,
     });
 
     return res.json({
@@ -291,46 +420,55 @@ router.get("/runs/:runId/result", async (req, res) => {
       result: resultStatus,
       verificationResult: runWithResult.verificationResult,
       run: getSafeRunSummary(runWithResult),
-      exchange
+      exchange,
     });
   } catch (error) {
     const durationMs = Date.now() - startTime;
     const errorCode = getVerifierErrorCode(error);
     const upstreamStatus = error.response?.status || null;
+
+    console.error("VERIFY RESULT ERROR", {
+      message: error.message,
+      code: error.code || null,
+      upstreamStatus,
+      upstreamDetails: error.response?.data || null,
+    });
+
     const errorDiagnostic = {
       code: errorCode || error.code || null,
-      upstreamStatus
+      upstreamStatus,
     };
 
+    // The wallet has not submitted a presentation yet.
     if (PENDING_RESULT_CODES.has(errorCode)) {
-      const exchange = addExchange(req.params.runId, {
+      const exchange = addExchange(runId, {
         ...eventBase,
         status: "PENDING",
         durationMs,
         diagnostic: errorDiagnostic,
-        error: null
+        error: null,
       });
 
       return res.status(202).json({
         success: true,
         pending: true,
         result: null,
-        run: getSafeRunSummary(getRun(req.params.runId)),
-        exchange
+        run: getSafeRunSummary(getRun(runId)),
+        exchange,
       });
     }
 
+    // The verifier explicitly rejected the presentation.
     if (REJECTED_PRESENTATION_CODES.has(errorCode)) {
-      setRunVerificationFailure(
-        req.params.runId,
-        errorCode
-      );
-      const exchange = addExchange(req.params.runId, {
+      setRunVerificationFailure(runId, errorCode);
+
+      const exchange = addExchange(runId, {
         ...eventBase,
         status: "FAILED",
         durationMs,
         diagnostic: errorDiagnostic,
-        error: "Inji Verify rejected the submitted presentation"
+        error:
+          "Inji Verify rejected the submitted presentation",
       });
 
       return res.status(200).json({
@@ -338,22 +476,23 @@ router.get("/runs/:runId/result", async (req, res) => {
         pending: false,
         result: "FAIL",
         errorCode,
-        run: getSafeRunSummary(getRun(req.params.runId)),
-        exchange
+        run: getSafeRunSummary(getRun(runId)),
+        exchange,
       });
     }
 
+    // Handle a reported wallet-submission error.
     if (
       upstreamStatus === 404 &&
       errorCode &&
       errorCode !== "INVALID_TRANSACTION_ID"
     ) {
-      const exchange = addExchange(req.params.runId, {
+      const exchange = addExchange(runId, {
         ...eventBase,
         status: "FAILED",
         durationMs,
         diagnostic: errorDiagnostic,
-        error: "Inji Verify reported a wallet submission error"
+        error: "Inji Verify reported a wallet submission error",
       });
 
       return res.status(409).json({
@@ -361,25 +500,26 @@ router.get("/runs/:runId/result", async (req, res) => {
         pending: false,
         result: null,
         errorCode,
-        run: getRun(req.params.runId),
-        exchange
+        run: getSafeRunSummary(getRun(runId)),
+        exchange,
       });
     }
 
-    const exchange = addExchange(req.params.runId, {
+    // Handle other result-retrieval errors.
+    const exchange = addExchange(runId, {
       ...eventBase,
       status: "ERROR",
       durationMs,
       diagnostic: errorDiagnostic,
-      error: "Verification result is unavailable"
+      error: "Verification result is unavailable",
     });
 
     return res.status(502).json({
       success: false,
       pending: true,
       error: "Verification result is unavailable",
-      run: getSafeRunSummary(getRun(req.params.runId)),
-      exchange
+      run: getSafeRunSummary(getRun(runId)),
+      exchange,
     });
   }
 });
