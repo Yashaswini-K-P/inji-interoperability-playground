@@ -1,18 +1,4 @@
 const DEFAULT_PROTOCOL = "openid4vp://";
-// Match Verify 0.18.2's QR component when its API omits optional metadata.
-const VERIFY_SDK_VP_FORMATS = {
-  ldp_vp: {
-    proof_type: [
-      "Ed25519Signature2018",
-      "Ed25519Signature2020",
-      "RsaSignature2018"
-    ]
-  },
-  "vc+sd-jwt": {
-    "sd-jwt_alg_values": ["RS256", "ES256", "ES256K", "EdDSA"],
-    "kb-jwt_alg_values": ["RS256", "ES256", "ES256K", "EdDSA"]
-  }
-};
 
 /**
  * Validate that a value is a non-empty string.
