@@ -90,6 +90,7 @@ test("reports prepared wallet actions as pending and leaves outcomes unconfirmed
     presentationRequest: "PREPARED",
     presentationWalletHandoff: "PREPARED"
   });
+  assert.equal(diagnostics.verificationStatus, "PENDING");
   assert.equal(diagnostics.connectivity.status, "NOT_CHECKED");
   assert.equal(diagnostics.issuance.credentialRequest, "UNSUPPORTED");
   assert.equal(diagnostics.issuance.credential, "NOT_CONFIRMED");
@@ -119,6 +120,37 @@ test("reports prepared wallet actions as pending and leaves outcomes unconfirmed
   );
 });
 
+test("reports wallet proof submission and issuer credential outcomes", () => {
+  const pending = createRunDiagnostics({
+    runId: "RUN-CREDENTIAL-PENDING",
+    scenario: { issuer: "inji-certify", wallet: "inji-mobile" },
+    exchanges: [{
+      stepName: "Credential Request",
+      status: "PENDING",
+      protocol: "OpenID4VCI"
+    }]
+  });
+
+  assert.equal(pending.issuance.credential, "PENDING_EXTERNAL_ACTION");
+  assert.equal(
+    pending.pendingExternalActions.at(-1).action,
+    "wallet-credential-proof"
+  );
+
+  const issued = createRunDiagnostics({
+    runId: "RUN-CREDENTIAL-ISSUED",
+    scenario: { issuer: "inji-certify", wallet: "inji-mobile" },
+    exchanges: [{
+      stepName: "Credential Request",
+      status: "SUCCESS",
+      protocol: "OpenID4VCI"
+    }]
+  });
+
+  assert.equal(issued.issuance.credential, "CONFIRMED");
+  assert.deepEqual(issued.pendingExternalActions, []);
+});
+
 test("reports only a stored verifier summary as a confirmed outcome", () => {
   const diagnostics = createRunDiagnostics({
     runId: "RUN-VERIFIED",
@@ -139,6 +171,7 @@ test("reports only a stored verifier summary as a confirmed outcome", () => {
     status: "CONFIRMED",
     result: "PASS"
   });
+  assert.equal(diagnostics.verificationStatus, "VERIFIED");
   assert.deepEqual(diagnostics.pendingExternalActions, []);
 });
 

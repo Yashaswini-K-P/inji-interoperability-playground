@@ -1,6 +1,8 @@
 const axios = require("axios");
 
 const VERIFY_API_PATH = "/v1/verify";
+const REQUEST_STATUS_TIMEOUT_MS = 65000;
+const RESULT_TIMEOUT_MS = 60000;
 
 function isPresentationDefinition(value) {
   return Boolean(
@@ -29,7 +31,18 @@ function isValidPresentationRequestResponse(response) {
     typeof response.requestId === "string" &&
     response.requestId.trim() &&
     typeof response.transactionId === "string" &&
-    response.transactionId.trim()
+    response.transactionId.trim() &&
+    (
+      (
+        typeof response.requestUri === "string" &&
+        response.requestUri.trim()
+      ) ||
+      (
+        response.authorizationDetails &&
+        typeof response.authorizationDetails === "object" &&
+        !Array.isArray(response.authorizationDetails)
+      )
+    )
   );
 }
 
@@ -85,7 +98,9 @@ class InjiVerifyAdapter {
     if (
       !["http:", "https:"].includes(baseUrl.protocol) ||
       baseUrl.username ||
-      baseUrl.password
+      baseUrl.password ||
+      baseUrl.search ||
+      baseUrl.hash
     ) {
       const error = new Error(
         "INJI_VERIFY_URL must be configured as an absolute HTTP(S) URL"
@@ -100,28 +115,27 @@ class InjiVerifyAdapter {
     return baseUrl.toString().replace(/\/+$/, "");
   }
 
-  /**
-   * Create a presentation request using a DCQL query.
-   */
-  async createPresentationRequest({ clientId, dcqlQuery }) {
-    console.log("VERIFY ADAPTER HIT", {
-      hasClientId: Boolean(clientId),
-      hasDcqlQuery: Boolean(dcqlQuery),
-    });
+  getApiBaseUrl() {
+    const baseUrl = new URL(this.getBaseUrl());
+    const path = baseUrl.pathname.replace(/\/+$/, "");
 
-    // Validate the DCQL query.
-    if (
-      !dcqlQuery ||
-      typeof dcqlQuery !== "object" ||
-      Array.isArray(dcqlQuery) ||
-      !Array.isArray(dcqlQuery.credentials) ||
-      dcqlQuery.credentials.length === 0
-    ) {
+    if (!path.endsWith(VERIFY_API_PATH)) {
+      baseUrl.pathname = `${path}${VERIFY_API_PATH}`;
+    }
+
+    return baseUrl.toString().replace(/\/+$/, "");
+  }
+
+  /**
+   * Create a Presentation Exchange request using Verify's 0.18.x API.
+   */
+  async createPresentationRequest({ clientId, presentationDefinition }) {
+    if (!isPresentationDefinition(presentationDefinition)) {
       const error = new Error(
-        "A valid dcqlQuery with a non-empty credentials array is required"
+        "A valid presentationDefinition with a non-empty input_descriptors array is required"
       );
 
-      error.code = "INVALID_DCQL_QUERY";
+      error.code = "INVALID_PRESENTATION_DEFINITION";
       error.statusCode = 400;
 
       throw error;
@@ -144,6 +158,15 @@ class InjiVerifyAdapter {
       throw error;
     }
 
+    if (!configuredClientId.startsWith("did:")) {
+      const error = new Error(
+        "INJI_VERIFY_CLIENT_ID must be a verifier DID for a DID-based OpenID4VP request"
+      );
+      error.code = "VERIFIER_CLIENT_ID_NOT_DID";
+      error.statusCode = 503;
+      throw error;
+    }
+
     if (clientId !== configuredClientId) {
       const error = new Error(
         "clientId must match the configured INJI_VERIFY_CLIENT_ID"
@@ -155,21 +178,18 @@ class InjiVerifyAdapter {
       throw error;
     }
 
-    // Construct the Verify endpoint.
-    const url = `${this.getBaseUrl()}/v2/vp-request`;
-
-    console.log("SENDING INJI VERIFY REQUEST", {
-      url,
-      method: "POST",
-    });
+    const url = `${this.getApiBaseUrl()}/vp-request`;
+    const requestBody = {
+      clientId: configuredClientId,
+      presentationDefinition,
+      acceptVPWithoutHolderProof: false,
+      responseCodeValidationRequired: false,
+    };
 
     try {
       const response = await axios.post(
         url,
-        {
-          clientId: configuredClientId,
-          dcqlQuery,
-        },
+        requestBody,
         {
           timeout: 15000,
           headers: {
@@ -179,32 +199,72 @@ class InjiVerifyAdapter {
         }
       );
 
-      console.log("INJI VERIFY REQUEST SUCCESS", {
-        status: response.status,
-      });
+      if (!isValidPresentationRequestResponse(response.data)) {
+        const error = new Error(
+          "Inji Verify returned a malformed presentation request response"
+        );
+        error.code = "INVALID_VERIFIER_RESPONSE";
+        error.statusCode = 502;
+        throw error;
+      }
+
+      if (
+        configuredClientId.startsWith("did:") &&
+        typeof response.data.requestUri !== "string"
+      ) {
+        const error = new Error(
+          "Inji Verify did not return the request URI required for a DID-based request"
+        );
+        error.code = "REQUEST_URI_REQUIRED";
+        error.statusCode = 502;
+        throw error;
+      }
 
       return response.data;
     } catch (error) {
-      console.error(
-        "Inji Verify HTTP status:",
-        error.response?.status ?? "No HTTP response"
-      );
-
-      console.error(
-        "Inji Verify error details:",
-        JSON.stringify(
-          error.response?.data ?? error.message,
-          null,
-          2
-        )
-      );
-
       throw error;
     }
   }
 
   /**
-   * Retrieve the verification result for a transaction.
+   * Long-poll Verify's request status endpoint, which returns ACTIVE,
+   * VP_SUBMITTED, or EXPIRED.
+   */
+  async getPresentationRequestStatus({ requestId }) {
+    if (typeof requestId !== "string" || !requestId.trim()) {
+      const error = new Error("requestId is required");
+      error.code = "REQUEST_ID_REQUIRED";
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const url =
+      `${this.getApiBaseUrl()}/vp-request/` +
+      `${encodeURIComponent(requestId)}/status`;
+
+    const response = await axios.get(url, {
+      timeout: REQUEST_STATUS_TIMEOUT_MS,
+      headers: { Accept: "application/json" },
+    });
+
+    if (
+      !response.data ||
+      typeof response.data !== "object" ||
+      !["ACTIVE", "VP_SUBMITTED", "EXPIRED"].includes(response.data.status)
+    ) {
+      const error = new Error(
+        "Inji Verify returned a malformed presentation request status"
+      );
+      error.code = "INVALID_VERIFIER_STATUS";
+      error.statusCode = 502;
+      throw error;
+    }
+
+    return response.data;
+  }
+
+  /**
+   * Retrieve the detailed verification result for a submitted transaction.
    */
   async getPresentationResult({ transactionId }) {
     if (
@@ -220,13 +280,8 @@ class InjiVerifyAdapter {
     }
 
     const url =
-      `${this.getBaseUrl()}/v2/vp-results/` +
+      `${this.getApiBaseUrl()}/v2/vp-results/` +
       encodeURIComponent(transactionId);
-
-    console.log("RETRIEVING INJI VERIFY RESULT", {
-      url,
-      transactionId,
-    });
 
     try {
       const response = await axios.post(
@@ -237,7 +292,7 @@ class InjiVerifyAdapter {
           includeClaims: false,
         },
         {
-          timeout: 15000,
+          timeout: RESULT_TIMEOUT_MS,
           headers: {
             "Content-Type": "application/json",
             Accept: "application/json",
@@ -245,26 +300,8 @@ class InjiVerifyAdapter {
         }
       );
 
-      console.log("INJI VERIFY RESULT SUCCESS", {
-        status: response.status,
-      });
-
       return response.data;
     } catch (error) {
-      console.error(
-        "Inji Verify result HTTP status:",
-        error.response?.status ?? "No HTTP response"
-      );
-
-      console.error(
-        "Inji Verify result error details:",
-        JSON.stringify(
-          error.response?.data ?? error.message,
-          null,
-          2
-        )
-      );
-
       throw error;
     }
   }

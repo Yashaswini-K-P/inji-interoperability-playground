@@ -4,6 +4,9 @@ const path = require("path");
 
 const dataDir = path.resolve(__dirname, "../../data");
 const runsFile = path.join(dataDir, "runs.json");
+const issuanceTokens = new Map();
+const credentialRequests = new Set();
+const submittedCredentialRequests = new Set();
 
 if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
@@ -185,6 +188,9 @@ function commitRun(runId, updatedRun) {
 
 function createRun(config) {
   const runId = `RUN-${crypto.randomBytes(3).toString("hex").toUpperCase()}`;
+  issuanceTokens.delete(runId);
+  credentialRequests.delete(runId);
+  submittedCredentialRequests.delete(runId);
 
   const run = {
     runId,
@@ -204,6 +210,7 @@ function createRun(config) {
     exchanges: [],
     offer: null,
     presentationRequest: null,
+    verificationStatus: null,
     verificationResult: null,
     result: null
   };
@@ -229,6 +236,7 @@ function listRuns() {
       return {
         runId: run.runId,
         status: run.status,
+        verificationStatus: run.verificationStatus || null,
         result: run.result || null,
         createdAt: run.createdAt,
         scenario: {
@@ -314,7 +322,151 @@ function setRunOffer(runId, offer) {
 
   const updatedRun = cloneRun(run);
   updatedRun.offer = offer;
+  updatedRun.issuanceStatus = null;
+  updatedRun.credentialReceipt = null;
+  issuanceTokens.delete(runId);
+  credentialRequests.delete(runId);
+  submittedCredentialRequests.delete(runId);
   return commitRun(runId, updatedRun);
+}
+
+function recordWalletCredentialReceipt(
+  runId,
+  { credentialConfigurationId, format }
+) {
+  const run = runs.get(runId);
+
+  if (!run) {
+    throw new Error(`Run not found: ${runId}`);
+  }
+
+  if (
+    run.scenario?.wallet !== "inji-mobile" ||
+    typeof credentialConfigurationId !== "string" ||
+    !credentialConfigurationId.trim() ||
+    typeof format !== "string" ||
+    !format.trim()
+  ) {
+    throw new Error("A valid Inji Mobile credential receipt is required");
+  }
+
+  if (credentialConfigurationId !== run.scenario.credential) {
+    throw new Error(
+      "Credential configuration does not match the run's selected credential"
+    );
+  }
+
+  if (run.scenario.format && format !== run.scenario.format) {
+    throw new Error("Credential format does not match the run's format");
+  }
+
+  if (run.credentialReceipt) {
+    if (
+      run.credentialReceipt.credentialConfigurationId ===
+        credentialConfigurationId &&
+      run.credentialReceipt.format === format
+    ) {
+      return run.credentialReceipt;
+    }
+    throw new Error("A different credential receipt is already recorded");
+  }
+
+  const updatedRun = cloneRun(run);
+  const receivedAt = new Date().toISOString();
+  const recordedExchange = {
+    step: updatedRun.exchanges.length + 1,
+    timestamp: receivedAt,
+    runId,
+    componentId: run.scenario.wallet,
+    protocolStep: "Wallet Credential Storage",
+    stepName: "Wallet Credential Storage",
+    protocol: "OpenID4VCI",
+    direction: "wallet-to-playground",
+    initiatedBy: "inji-mobile",
+    status: "SUCCESS",
+    credentialConfigurationId,
+    format,
+    durationMs: 0,
+    error: null
+  };
+
+  updatedRun.issuanceStatus = "STORED";
+  updatedRun.credentialReceipt = {
+    issuer: run.scenario.issuer,
+    wallet: run.scenario.wallet,
+    credentialConfigurationId,
+    format,
+    receivedAt
+  };
+  updatedRun.exchanges.push(recordedExchange);
+  commitRun(runId, updatedRun);
+  return updatedRun.credentialReceipt;
+}
+
+function setRunIssuanceToken(runId, token) {
+  if (!runs.has(runId)) {
+    throw new Error(`Run not found: ${runId}`);
+  }
+
+  const now = Date.now();
+  for (const [id, currentToken] of issuanceTokens) {
+    if (currentToken.expiresAt && currentToken.expiresAt <= now) {
+      issuanceTokens.delete(id);
+    }
+  }
+
+  issuanceTokens.set(runId, {
+    accessToken: token.accessToken,
+    cNonce: token.cNonce || null,
+    expiresAt: Number.isFinite(token.expiresIn) && token.expiresIn > 0
+      ? now + token.expiresIn * 1000
+      : null
+  });
+}
+
+function clearRunIssuanceToken(runId) {
+  issuanceTokens.delete(runId);
+}
+
+function getRunIssuanceToken(runId) {
+  const token = issuanceTokens.get(runId);
+
+  if (!token) {
+    return null;
+  }
+
+  if (token.expiresAt && token.expiresAt <= Date.now()) {
+    issuanceTokens.delete(runId);
+    return null;
+  }
+
+  return { ...token };
+}
+
+function reserveRunCredentialRequest(runId) {
+  if (
+    credentialRequests.has(runId) ||
+    submittedCredentialRequests.has(runId)
+  ) {
+    return false;
+  }
+
+  credentialRequests.add(runId);
+  return true;
+}
+
+function releaseRunCredentialRequest(runId) {
+  credentialRequests.delete(runId);
+}
+
+function completeRunCredentialRequest(runId) {
+  credentialRequests.delete(runId);
+  submittedCredentialRequests.add(runId);
+  issuanceTokens.delete(runId);
+}
+
+function hasSubmittedRunCredentialRequest(runId) {
+  return submittedCredentialRequests.has(runId);
 }
 
 function updateRunStatus(runId, status) {
@@ -347,11 +499,29 @@ function setRunPresentationRequest(
     throw new Error("presentationRequest is required");
   }
 
+  if (
+    typeof presentationRequest.requestId !== "string" ||
+    !presentationRequest.requestId.trim() ||
+    typeof presentationRequest.transactionId !== "string" ||
+    !presentationRequest.transactionId.trim()
+  ) {
+    throw new Error(
+      "presentationRequest must include Verify requestId and transactionId"
+    );
+  }
+
   const updatedRun = cloneRun(run);
   updatedRun.status = "IN_PROGRESS";
+  updatedRun.verificationStatus = "PENDING";
   updatedRun.result = null;
   updatedRun.verificationResult = null;
   updatedRun.verificationFailure = null;
+  const authorizationDetails =
+    presentationRequest.authorizationDetails &&
+    typeof presentationRequest.authorizationDetails === "object" &&
+    !Array.isArray(presentationRequest.authorizationDetails)
+      ? presentationRequest.authorizationDetails
+      : {};
   updatedRun.presentationRequest = {
     verifierId: run.scenario.verifier,
     protocol: run.scenario.presentationProtocol || "openid4vp",
@@ -365,6 +535,21 @@ function setRunPresentationRequest(
       typeof presentationRequest.transactionId === "string"
         ? presentationRequest.transactionId
         : null,
+    requestUri:
+      typeof presentationRequest.requestUri === "string"
+        ? presentationRequest.requestUri
+        : null,
+    state:
+      typeof authorizationDetails.state === "string"
+        ? authorizationDetails.state
+        : typeof presentationRequest.requestId === "string"
+          ? presentationRequest.requestId
+          : null,
+    nonce:
+      typeof authorizationDetails.nonce === "string"
+        ? authorizationDetails.nonce
+        : null,
+    expiresAt: presentationRequest.expiresAt || null,
     authorizationRequest: presentationRequest
   };
 
@@ -390,6 +575,12 @@ function setRunVerificationResult(
     throw new Error("A valid authoritative verification summary is required");
   }
 
+  if (run.presentationRequest?.transactionId !== transactionId) {
+    throw new Error(
+      "Verification result transactionId does not match the run's Verify request"
+    );
+  }
+
   const updatedRun = cloneRun(run);
   updatedRun.verificationResult = {
     transactionId,
@@ -397,8 +588,36 @@ function setRunVerificationResult(
     credentialCount,
     retrievedAt: new Date().toISOString()
   };
+  updatedRun.verificationStatus = allChecksSuccessful
+    ? "VERIFIED"
+    : "REJECTED";
   updatedRun.status = allChecksSuccessful ? "COMPLETED" : "FAILED";
   updatedRun.result = allChecksSuccessful ? "PASS" : "FAIL";
+
+  return commitRun(runId, updatedRun);
+}
+
+function setRunVerificationStatus(runId, verificationStatus) {
+  const allowedStatuses = new Set([
+    "PENDING",
+    "SUBMITTED",
+    "VERIFIED",
+    "REJECTED",
+    "ERROR"
+  ]);
+
+  if (!allowedStatuses.has(verificationStatus)) {
+    throw new Error("A valid verification lifecycle status is required");
+  }
+
+  const run = runs.get(runId);
+
+  if (!run) {
+    throw new Error(`Run not found: ${runId}`);
+  }
+
+  const updatedRun = cloneRun(run);
+  updatedRun.verificationStatus = verificationStatus;
 
   return commitRun(runId, updatedRun);
 }
@@ -415,6 +634,7 @@ function setRunVerificationFailure(runId, errorCode) {
   }
 
   const updatedRun = cloneRun(run);
+  updatedRun.verificationStatus = "REJECTED";
   updatedRun.status = "FAILED";
   updatedRun.result = "FAIL";
   updatedRun.verificationFailure = {
@@ -432,7 +652,16 @@ module.exports = {
   addExchange,
   updateRunStatus,
   setRunOffer,
+  recordWalletCredentialReceipt,
+  setRunIssuanceToken,
+  clearRunIssuanceToken,
+  getRunIssuanceToken,
+  reserveRunCredentialRequest,
+  releaseRunCredentialRequest,
+  completeRunCredentialRequest,
+  hasSubmittedRunCredentialRequest,
   setRunPresentationRequest,
+  setRunVerificationStatus,
   setRunVerificationResult,
   setRunVerificationFailure
 };

@@ -64,6 +64,24 @@ async function getPresentationResult(
   return adapter.getPresentationResult(data);
 }
 
+async function getPresentationRequestStatus(
+  verifierId,
+  data
+) {
+  const adapter = getVerifierAdapter(verifierId);
+
+  if (typeof adapter.getPresentationRequestStatus !== "function") {
+    const error = new Error(
+      `Verifier ${verifierId} does not support request status retrieval`
+    );
+    error.code = "VERIFIER_OPERATION_UNSUPPORTED";
+    error.statusCode = 501;
+    throw error;
+  }
+
+  return adapter.getPresentationRequestStatus(data);
+}
+
 function getVerifierClientId(verifierId) {
   const adapter = getVerifierAdapter(verifierId);
   const clientId = adapter.getInfo().clientId;
@@ -77,6 +95,15 @@ function getVerifierClientId(verifierId) {
     throw error;
   }
 
+  if (!clientId.startsWith("did:")) {
+    const error = new Error(
+      "INJI_VERIFY_CLIENT_ID must be the verifier DID used for a DID-based OpenID4VP request"
+    );
+    error.code = "VERIFIER_CLIENT_ID_NOT_DID";
+    error.statusCode = 503;
+    throw error;
+  }
+
   return clientId;
 }
 
@@ -86,5 +113,6 @@ module.exports = {
   getVerifierInfo,
   getVerifierClientId,
   createPresentationRequest,
+  getPresentationRequestStatus,
   getPresentationResult
 };

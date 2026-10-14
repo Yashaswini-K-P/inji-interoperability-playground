@@ -427,5 +427,666 @@
     },
     "verificationResult": null,
     "result": null
+  },
+  "RUN-2F3676": {
+    "runId": "RUN-2F3676",
+    "status": "FAILED",
+    "createdAt": "2026-10-14T15:07:19.488Z",
+    "scenario": {
+      "issuer": "inji-certify",
+      "credential": "FarmerCredential",
+      "format": "ldp_vc",
+      "issuanceFlow": "pre_authorized_code",
+      "wallet": "inji-mobile",
+      "verifier": "inji-verify",
+      "presentationProtocol": "openid4vp"
+    },
+    "exchanges": [
+      {
+        "stepName": "Pre-Authorized Data",
+        "protocol": "OpenID4VCI",
+        "direction": "playground-to-issuer",
+        "status": "SUCCESS",
+        "durationMs": 178,
+        "error": null,
+        "step": 1,
+        "timestamp": "2026-10-14T15:07:25.297Z",
+        "runId": "RUN-2F3676",
+        "componentId": "inji-certify",
+        "protocolStep": "Pre-Authorized Data"
+      },
+      {
+        "stepName": "Wallet Handoff",
+        "protocol": "OpenID4VCI",
+        "direction": "playground-to-wallet",
+        "status": "PENDING_EXTERNAL_ACTION",
+        "externalAction": "wallet-scan-not-observed",
+        "handoffStatus": "PREPARED",
+        "handoffMethod": "cross-device-qr",
+        "actionRequiredCode": "SCAN_CREDENTIAL_OFFER_IN_INJI_MOBILE",
+        "actionRequired": "Scan the offer with the selected wallet",
+        "durationMs": 0,
+        "error": null,
+        "step": 2,
+        "timestamp": "2026-10-14T15:07:39.064Z",
+        "runId": "RUN-2F3676",
+        "componentId": "inji-mobile",
+        "protocolStep": "Wallet Handoff"
+      },
+      {
+        "stepName": "Wallet Handoff",
+        "protocol": "OpenID4VCI",
+        "direction": "playground-to-wallet",
+        "status": "PENDING_EXTERNAL_ACTION",
+        "externalAction": "wallet-scan-not-observed",
+        "handoffStatus": "PREPARED",
+        "handoffMethod": "cross-device-qr",
+        "actionRequiredCode": "SCAN_CREDENTIAL_OFFER_IN_INJI_MOBILE",
+        "actionRequired": "Scan the offer with the selected wallet",
+        "durationMs": 0,
+        "error": null,
+        "step": 3,
+        "timestamp": "2026-10-14T15:07:41.197Z",
+        "runId": "RUN-2F3676",
+        "componentId": "inji-mobile",
+        "protocolStep": "Wallet Handoff"
+      },
+      {
+        "stepName": "Presentation Request Creation",
+        "protocol": "openid4vp",
+        "direction": "playground-to-verifier",
+        "status": "FAILED",
+        "initiatedBy": "playground",
+        "durationMs": 5,
+        "error": "INJI_VERIFY_CLIENT_ID must be the verifier DID used for a DID-based OpenID4VP request",
+        "diagnostic": {
+          "code": "VERIFIER_CLIENT_ID_NOT_DID",
+          "upstreamStatus": null
+        },
+        "step": 4,
+        "timestamp": "2026-10-14T15:08:10.196Z",
+        "runId": "RUN-2F3676",
+        "componentId": "inji-verify",
+        "protocolStep": "Presentation Request Creation"
+      }
+    ],
+    "offer": {
+      "credentialOfferUri": "openid-credential-offer://?credential_offer_uri=http%3A%2F%2F192.168.0.102%3A8091%2Fv1%2Fcertify%2Fcredential-offer-data%2F46f636d2-6778-4d1c-a2c0-7fde079db4ec",
+      "type": "openid-credential-offer"
+    },
+    "presentationRequest": null,
+    "verificationStatus": "ERROR",
+    "verificationResult": null,
+    "result": null
+  },
+  "RUN-C9D247": {
+    "runId": "RUN-C9D247",
+    "status": "FAILED",
+    "createdAt": "2026-10-14T15:25:53.153Z",
+    "scenario": {
+      "issuer": "inji-certify",
+      "credential": "FarmerCredential",
+      "format": "ldp_vc",
+      "issuanceFlow": "pre_authorized_code",
+      "wallet": "inji-mobile",
+      "verifier": "inji-verify",
+      "presentationProtocol": "openid4vp"
+    },
+    "exchanges": [
+      {
+        "stepName": "Pre-Authorized Data",
+        "protocol": "OpenID4VCI",
+        "direction": "playground-to-issuer",
+        "status": "SUCCESS",
+        "durationMs": 88,
+        "error": null,
+        "step": 1,
+        "timestamp": "2026-10-14T15:25:55.622Z",
+        "runId": "RUN-C9D247",
+        "componentId": "inji-certify",
+        "protocolStep": "Pre-Authorized Data"
+      },
+      {
+        "stepName": "Wallet Handoff",
+        "protocol": "OpenID4VCI",
+        "direction": "playground-to-wallet",
+        "status": "PENDING_EXTERNAL_ACTION",
+        "externalAction": "wallet-scan-not-observed",
+        "handoffStatus": "PREPARED",
+        "handoffMethod": "cross-device-qr",
+        "actionRequiredCode": "SCAN_CREDENTIAL_OFFER_IN_INJI_MOBILE",
+        "actionRequired": "Scan the offer with the selected wallet",
+        "durationMs": 0,
+        "error": null,
+        "step": 2,
+        "timestamp": "2026-10-14T15:25:57.407Z",
+        "runId": "RUN-C9D247",
+        "componentId": "inji-mobile",
+        "protocolStep": "Wallet Handoff"
+      },
+      {
+        "stepName": "Wallet Handoff",
+        "protocol": "OpenID4VCI",
+        "direction": "playground-to-wallet",
+        "status": "PENDING_EXTERNAL_ACTION",
+        "externalAction": "wallet-scan-not-observed",
+        "handoffStatus": "PREPARED",
+        "handoffMethod": "cross-device-qr",
+        "actionRequiredCode": "SCAN_CREDENTIAL_OFFER_IN_INJI_MOBILE",
+        "actionRequired": "Scan the offer with the selected wallet",
+        "durationMs": 0,
+        "error": null,
+        "step": 3,
+        "timestamp": "2026-10-14T15:27:20.052Z",
+        "runId": "RUN-C9D247",
+        "componentId": "inji-mobile",
+        "protocolStep": "Wallet Handoff"
+      },
+      {
+        "stepName": "Presentation Request Creation",
+        "protocol": "openid4vp",
+        "direction": "playground-to-verifier",
+        "status": "FAILED",
+        "initiatedBy": "playground",
+        "durationMs": 6,
+        "error": "INJI_VERIFY_CLIENT_ID must be the verifier DID used for a DID-based OpenID4VP request",
+        "diagnostic": {
+          "code": "VERIFIER_CLIENT_ID_NOT_DID",
+          "upstreamStatus": null
+        },
+        "step": 4,
+        "timestamp": "2026-10-14T15:27:47.941Z",
+        "runId": "RUN-C9D247",
+        "componentId": "inji-verify",
+        "protocolStep": "Presentation Request Creation"
+      },
+      {
+        "stepName": "Authorization URI Generation",
+        "protocol": "openid4vp",
+        "direction": "playground-to-wallet",
+        "status": "FAILED",
+        "initiatedBy": "playground",
+        "externalAction": "wallet-scan-not-observed",
+        "durationMs": 0,
+        "error": "Presentation request not available for this run",
+        "step": 5,
+        "timestamp": "2026-10-14T15:28:52.157Z",
+        "runId": "RUN-C9D247",
+        "componentId": "inji-mobile",
+        "protocolStep": "Authorization URI Generation"
+      },
+      {
+        "stepName": "Wallet Handoff",
+        "protocol": "OpenID4VCI",
+        "direction": "playground-to-wallet",
+        "status": "PENDING_EXTERNAL_ACTION",
+        "externalAction": "wallet-scan-not-observed",
+        "handoffStatus": "PREPARED",
+        "handoffMethod": "cross-device-qr",
+        "actionRequiredCode": "SCAN_CREDENTIAL_OFFER_IN_INJI_MOBILE",
+        "actionRequired": "Scan the offer with the selected wallet",
+        "durationMs": 0,
+        "error": null,
+        "step": 6,
+        "timestamp": "2026-10-14T15:28:57.689Z",
+        "runId": "RUN-C9D247",
+        "componentId": "inji-mobile",
+        "protocolStep": "Wallet Handoff"
+      }
+    ],
+    "offer": {
+      "credentialOfferUri": "openid-credential-offer://?credential_offer_uri=http%3A%2F%2F192.168.0.102%3A8091%2Fv1%2Fcertify%2Fcredential-offer-data%2Fd2be3181-021b-45c1-9682-a05412315ed9",
+      "type": "openid-credential-offer"
+    },
+    "presentationRequest": null,
+    "verificationStatus": "ERROR",
+    "verificationResult": null,
+    "result": null
+  },
+  "RUN-4B4CE9": {
+    "runId": "RUN-4B4CE9",
+    "status": "IN_PROGRESS",
+    "createdAt": "2026-10-14T15:28:06.835Z",
+    "scenario": {
+      "issuer": "inji-certify",
+      "credential": "FarmerCredential",
+      "format": "ldp_vc",
+      "issuanceFlow": "pre_authorized_code",
+      "wallet": "inji-mobile",
+      "verifier": "inji-verify",
+      "presentationProtocol": "openid4vp"
+    },
+    "exchanges": [
+      {
+        "stepName": "Pre-Authorized Data",
+        "protocol": "OpenID4VCI",
+        "direction": "playground-to-issuer",
+        "status": "SUCCESS",
+        "durationMs": 165,
+        "error": null,
+        "step": 1,
+        "timestamp": "2026-10-14T15:30:14.374Z",
+        "runId": "RUN-4B4CE9",
+        "componentId": "inji-certify",
+        "protocolStep": "Pre-Authorized Data"
+      },
+      {
+        "stepName": "Credential Offer",
+        "protocol": "OpenID4VCI",
+        "direction": "playground-to-issuer",
+        "status": "SUCCESS",
+        "durationMs": 179,
+        "error": null,
+        "step": 2,
+        "timestamp": "2026-10-14T15:31:02.422Z",
+        "runId": "RUN-4B4CE9",
+        "componentId": "inji-certify",
+        "protocolStep": "Credential Offer"
+      },
+      {
+        "stepName": "Token Request",
+        "protocol": "OpenID4VCI",
+        "direction": "playground-to-issuer",
+        "status": "SUCCESS",
+        "durationMs": 670,
+        "error": null,
+        "step": 3,
+        "timestamp": "2026-10-14T15:32:22.719Z",
+        "runId": "RUN-4B4CE9",
+        "componentId": "inji-certify",
+        "protocolStep": "Token Request"
+      },
+      {
+        "stepName": "Credential Request",
+        "protocol": "OpenID4VCI",
+        "direction": "playground-to-wallet",
+        "componentId": "inji-mobile",
+        "status": "UNSUPPORTED",
+        "durationMs": 0,
+        "format": "ldp_vc",
+        "error": "The selected wallet adapter does not create credential requests",
+        "diagnostic": {
+          "code": "CREDENTIAL_REQUEST_UNSUPPORTED",
+          "owner": "selected-wallet",
+          "action": "Continue issuance in the selected wallet using the prepared credential offer"
+        },
+        "step": 4,
+        "timestamp": "2026-10-14T15:33:01.490Z",
+        "runId": "RUN-4B4CE9",
+        "protocolStep": "Credential Request"
+      },
+      {
+        "stepName": "Wallet Handoff",
+        "protocol": "OpenID4VCI",
+        "direction": "playground-to-wallet",
+        "status": "PENDING_EXTERNAL_ACTION",
+        "externalAction": "wallet-scan-not-observed",
+        "handoffStatus": "PREPARED",
+        "handoffMethod": "cross-device-qr",
+        "actionRequiredCode": "SCAN_CREDENTIAL_OFFER_IN_INJI_MOBILE",
+        "actionRequired": "Scan the offer with the selected wallet",
+        "durationMs": 0,
+        "error": null,
+        "step": 5,
+        "timestamp": "2026-10-14T15:33:59.122Z",
+        "runId": "RUN-4B4CE9",
+        "componentId": "inji-mobile",
+        "protocolStep": "Wallet Handoff"
+      }
+    ],
+    "offer": {
+      "credentialOfferUri": "openid-credential-offer://?credential_offer_uri=http%3A%2F%2F192.168.0.102%3A8091%2Fv1%2Fcertify%2Fcredential-offer-data%2F85bc1a48-1546-4dfa-a51d-66ec16c44c68",
+      "type": "openid-credential-offer"
+    },
+    "presentationRequest": null,
+    "verificationStatus": null,
+    "verificationResult": null,
+    "result": null
+  },
+  "RUN-8706F9": {
+    "runId": "RUN-8706F9",
+    "status": "IN_PROGRESS",
+    "createdAt": "2026-10-14T15:29:51.163Z",
+    "scenario": {
+      "issuer": "inji-certify",
+      "credential": "FarmerCredential",
+      "format": "ldp_vc",
+      "issuanceFlow": "pre_authorized_code",
+      "wallet": "inji-mobile",
+      "verifier": "inji-verify",
+      "presentationProtocol": "openid4vp"
+    },
+    "exchanges": [
+      {
+        "stepName": "Pre-Authorized Data",
+        "protocol": "OpenID4VCI",
+        "direction": "playground-to-issuer",
+        "status": "SUCCESS",
+        "durationMs": 224,
+        "error": null,
+        "step": 1,
+        "timestamp": "2026-10-14T15:29:54.982Z",
+        "runId": "RUN-8706F9",
+        "componentId": "inji-certify",
+        "protocolStep": "Pre-Authorized Data"
+      },
+      {
+        "stepName": "Wallet Handoff",
+        "protocol": "OpenID4VCI",
+        "direction": "playground-to-wallet",
+        "status": "PENDING_EXTERNAL_ACTION",
+        "externalAction": "wallet-scan-not-observed",
+        "handoffStatus": "PREPARED",
+        "handoffMethod": "cross-device-qr",
+        "actionRequiredCode": "SCAN_CREDENTIAL_OFFER_IN_INJI_MOBILE",
+        "actionRequired": "Scan the offer with the selected wallet",
+        "durationMs": 0,
+        "error": null,
+        "step": 2,
+        "timestamp": "2026-10-14T15:29:58.472Z",
+        "runId": "RUN-8706F9",
+        "componentId": "inji-mobile",
+        "protocolStep": "Wallet Handoff"
+      }
+    ],
+    "offer": {
+      "credentialOfferUri": "openid-credential-offer://?credential_offer_uri=http%3A%2F%2F192.168.0.102%3A8091%2Fv1%2Fcertify%2Fcredential-offer-data%2F6a07065c-722e-471d-a256-afb74e0745fd",
+      "type": "openid-credential-offer"
+    },
+    "presentationRequest": null,
+    "verificationStatus": null,
+    "verificationResult": null,
+    "result": null
+  },
+  "RUN-7DBEE0": {
+    "runId": "RUN-7DBEE0",
+    "status": "FAILED",
+    "createdAt": "2026-10-14T15:48:10.335Z",
+    "scenario": {
+      "issuer": "inji-certify",
+      "credential": "FarmerCredential",
+      "format": "ldp_vc",
+      "issuanceFlow": "pre_authorized_code",
+      "wallet": "inji-mobile",
+      "verifier": "inji-verify",
+      "presentationProtocol": "openid4vp"
+    },
+    "exchanges": [
+      {
+        "stepName": "Pre-Authorized Data",
+        "protocol": "OpenID4VCI",
+        "direction": "playground-to-issuer",
+        "status": "SUCCESS",
+        "durationMs": 141,
+        "error": null,
+        "step": 1,
+        "timestamp": "2026-10-14T15:48:13.130Z",
+        "runId": "RUN-7DBEE0",
+        "componentId": "inji-certify",
+        "protocolStep": "Pre-Authorized Data"
+      },
+      {
+        "stepName": "Wallet Handoff",
+        "protocol": "OpenID4VCI",
+        "direction": "playground-to-wallet",
+        "status": "PENDING_EXTERNAL_ACTION",
+        "externalAction": "wallet-scan-not-observed",
+        "handoffStatus": "PREPARED",
+        "handoffMethod": "cross-device-qr",
+        "actionRequiredCode": "SCAN_CREDENTIAL_OFFER_IN_INJI_MOBILE",
+        "actionRequired": "Scan the offer with the selected wallet",
+        "durationMs": 0,
+        "error": null,
+        "step": 2,
+        "timestamp": "2026-10-14T15:48:16.002Z",
+        "runId": "RUN-7DBEE0",
+        "componentId": "inji-mobile",
+        "protocolStep": "Wallet Handoff"
+      },
+      {
+        "stepName": "Authorization URI Generation",
+        "protocol": "openid4vp",
+        "direction": "playground-to-wallet",
+        "status": "FAILED",
+        "initiatedBy": "playground",
+        "externalAction": "wallet-scan-not-observed",
+        "durationMs": 0,
+        "error": "Presentation request not available for this run",
+        "step": 3,
+        "timestamp": "2026-10-14T15:48:21.437Z",
+        "runId": "RUN-7DBEE0",
+        "componentId": "inji-mobile",
+        "protocolStep": "Authorization URI Generation"
+      },
+      {
+        "stepName": "Authorization URI Generation",
+        "protocol": "openid4vp",
+        "direction": "playground-to-wallet",
+        "status": "FAILED",
+        "initiatedBy": "playground",
+        "externalAction": "wallet-scan-not-observed",
+        "durationMs": 0,
+        "error": "Presentation request not available for this run",
+        "step": 4,
+        "timestamp": "2026-10-14T15:49:49.284Z",
+        "runId": "RUN-7DBEE0",
+        "componentId": "inji-mobile",
+        "protocolStep": "Authorization URI Generation"
+      }
+    ],
+    "offer": {
+      "credentialOfferUri": "openid-credential-offer://?credential_offer_uri=http%3A%2F%2F192.168.0.102%3A8091%2Fv1%2Fcertify%2Fcredential-offer-data%2Fb3c4debf-42d8-44e0-8ad1-3726fe8a36bd",
+      "type": "openid-credential-offer"
+    },
+    "presentationRequest": null,
+    "verificationStatus": null,
+    "verificationResult": null,
+    "result": null
+  },
+  "RUN-CA31A6": {
+    "runId": "RUN-CA31A6",
+    "status": "IN_PROGRESS",
+    "createdAt": "2026-10-14T16:00:27.670Z",
+    "scenario": {
+      "issuer": "inji-certify",
+      "credential": "FarmerCredential",
+      "format": "ldp_vc",
+      "issuanceFlow": "pre_authorized_code",
+      "wallet": "inji-mobile",
+      "verifier": "inji-verify",
+      "presentationProtocol": "openid4vp"
+    },
+    "exchanges": [
+      {
+        "stepName": "Pre-Authorized Data",
+        "protocol": "OpenID4VCI",
+        "direction": "playground-to-issuer",
+        "status": "SUCCESS",
+        "durationMs": 84,
+        "error": null,
+        "step": 1,
+        "timestamp": "2026-10-14T16:00:30.002Z",
+        "runId": "RUN-CA31A6",
+        "componentId": "inji-certify",
+        "protocolStep": "Pre-Authorized Data"
+      },
+      {
+        "stepName": "Wallet Handoff",
+        "protocol": "OpenID4VCI",
+        "direction": "playground-to-wallet",
+        "status": "PENDING_EXTERNAL_ACTION",
+        "externalAction": "wallet-scan-not-observed",
+        "handoffStatus": "PREPARED",
+        "handoffMethod": "cross-device-qr",
+        "actionRequiredCode": "SCAN_CREDENTIAL_OFFER_IN_INJI_MOBILE",
+        "actionRequired": "Scan the offer with the selected wallet",
+        "durationMs": 0,
+        "error": null,
+        "step": 2,
+        "timestamp": "2026-10-14T16:00:31.360Z",
+        "runId": "RUN-CA31A6",
+        "componentId": "inji-mobile",
+        "protocolStep": "Wallet Handoff"
+      }
+    ],
+    "offer": {
+      "credentialOfferUri": "openid-credential-offer://?credential_offer_uri=http%3A%2F%2F192.168.0.102%3A8091%2Fv1%2Fcertify%2Fcredential-offer-data%2F10204777-d4ee-4df3-b3c3-20da615ca4ba",
+      "type": "openid-credential-offer"
+    },
+    "presentationRequest": null,
+    "verificationStatus": null,
+    "verificationResult": null,
+    "result": null
+  },
+  "RUN-04EF61": {
+    "runId": "RUN-04EF61",
+    "status": "FAILED",
+    "createdAt": "2026-10-14T16:05:23.997Z",
+    "scenario": {
+      "issuer": "inji-certify",
+      "credential": "FarmerCredential",
+      "format": "ldp_vc",
+      "issuanceFlow": "pre_authorized_code",
+      "wallet": "inji-mobile",
+      "verifier": "inji-verify",
+      "presentationProtocol": "openid4vp"
+    },
+    "exchanges": [
+      {
+        "stepName": "Pre-Authorized Data",
+        "protocol": "OpenID4VCI",
+        "direction": "playground-to-issuer",
+        "status": "SUCCESS",
+        "durationMs": 194,
+        "error": null,
+        "step": 1,
+        "timestamp": "2026-10-14T16:05:25.146Z",
+        "runId": "RUN-04EF61",
+        "componentId": "inji-certify",
+        "protocolStep": "Pre-Authorized Data"
+      },
+      {
+        "stepName": "Wallet Handoff",
+        "protocol": "OpenID4VCI",
+        "direction": "playground-to-wallet",
+        "status": "PENDING_EXTERNAL_ACTION",
+        "externalAction": "wallet-scan-not-observed",
+        "handoffStatus": "PREPARED",
+        "handoffMethod": "cross-device-qr",
+        "actionRequiredCode": "SCAN_CREDENTIAL_OFFER_IN_INJI_MOBILE",
+        "actionRequired": "Scan the offer with the selected wallet",
+        "durationMs": 0,
+        "error": null,
+        "step": 2,
+        "timestamp": "2026-10-14T16:05:26.271Z",
+        "runId": "RUN-04EF61",
+        "componentId": "inji-mobile",
+        "protocolStep": "Wallet Handoff"
+      },
+      {
+        "stepName": "Presentation Request Creation",
+        "protocol": "openid4vp",
+        "direction": "playground-to-verifier",
+        "status": "FAILED",
+        "initiatedBy": "playground",
+        "durationMs": 5,
+        "error": "INJI_VERIFY_CLIENT_ID must be the verifier DID used for a DID-based OpenID4VP request",
+        "diagnostic": {
+          "code": "VERIFIER_CLIENT_ID_NOT_DID",
+          "upstreamStatus": null
+        },
+        "step": 3,
+        "timestamp": "2026-10-14T16:05:44.897Z",
+        "runId": "RUN-04EF61",
+        "componentId": "inji-verify",
+        "protocolStep": "Presentation Request Creation"
+      }
+    ],
+    "offer": {
+      "credentialOfferUri": "openid-credential-offer://?credential_offer_uri=http%3A%2F%2F192.168.0.102%3A8091%2Fv1%2Fcertify%2Fcredential-offer-data%2F63c8ec35-fb07-4037-8a9e-cd7b4d48afaa",
+      "type": "openid-credential-offer"
+    },
+    "presentationRequest": null,
+    "verificationStatus": "ERROR",
+    "verificationResult": null,
+    "result": null
+  },
+  "RUN-895536": {
+    "runId": "RUN-895536",
+    "status": "IN_PROGRESS",
+    "createdAt": "2026-10-14T16:32:57.289Z",
+    "scenario": {
+      "issuer": "inji-certify",
+      "credential": "FarmerCredential",
+      "format": "mso_mdoc",
+      "issuanceFlow": "pre_authorized_code",
+      "wallet": "inji-mobile",
+      "verifier": "inji-verify",
+      "presentationProtocol": "openid4vp"
+    },
+    "exchanges": [
+      {
+        "stepName": "Pre-Authorized Data",
+        "protocol": "OpenID4VCI",
+        "direction": "playground-to-issuer",
+        "status": "SUCCESS",
+        "durationMs": 183,
+        "error": null,
+        "step": 1,
+        "timestamp": "2026-10-14T16:33:06.272Z",
+        "runId": "RUN-895536",
+        "componentId": "inji-certify",
+        "protocolStep": "Pre-Authorized Data"
+      }
+    ],
+    "offer": {
+      "credentialOfferUri": "openid-credential-offer://?credential_offer_uri=http%3A%2F%2F192.168.0.102%3A8091%2Fv1%2Fcertify%2Fcredential-offer-data%2Fb6b60aca-b8ef-48b9-954c-f22178500748",
+      "type": "openid-credential-offer"
+    },
+    "presentationRequest": null,
+    "verificationStatus": null,
+    "verificationResult": null,
+    "result": null,
+    "issuanceStatus": null,
+    "credentialReceipt": null
+  },
+  "RUN-123875": {
+    "runId": "RUN-123875",
+    "status": "FAILED",
+    "createdAt": "2026-10-14T16:33:54.957Z",
+    "scenario": {
+      "issuer": "inji-certify",
+      "credential": "FarmerCredential",
+      "format": "ldp_vc",
+      "issuanceFlow": "pre_authorized_code",
+      "wallet": "inji-mobile",
+      "verifier": "inji-verify",
+      "presentationProtocol": "openid4vp"
+    },
+    "exchanges": [
+      {
+        "stepName": "Presentation Request Creation",
+        "protocol": "openid4vp",
+        "direction": "playground-to-verifier",
+        "status": "FAILED",
+        "initiatedBy": "playground",
+        "durationMs": 3,
+        "error": "INJI_VERIFY_CLIENT_ID must be the verifier DID used for a DID-based OpenID4VP request",
+        "diagnostic": {
+          "code": "VERIFIER_CLIENT_ID_NOT_DID",
+          "upstreamStatus": null
+        },
+        "step": 1,
+        "timestamp": "2026-10-14T16:34:01.850Z",
+        "runId": "RUN-123875",
+        "componentId": "inji-verify",
+        "protocolStep": "Presentation Request Creation"
+      }
+    ],
+    "offer": null,
+    "presentationRequest": null,
+    "verificationStatus": "ERROR",
+    "verificationResult": null,
+    "result": null
   }
 }

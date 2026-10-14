@@ -8,6 +8,7 @@ const adapterPath = require.resolve(
 );
 const originalAxiosModule = require.cache[axiosPath];
 const axiosMock = {
+  get: async () => ({ data: { status: "VP_SUBMITTED" } }),
   post: async () => ({
     data: {
       requestId: "req-mocked",
@@ -29,10 +30,7 @@ const presentationDefinition = {
 const presentationRequest = {
   requestId: "req-actual",
   transactionId: "txn-actual",
-  authorizationDetails: {
-    clientId: "did:web:verify.example",
-    responseType: "vp_token"
-  }
+  requestUri: "http://verify.example/v1/verify/vp-request/req-actual"
 };
 
 if (originalAxiosModule) {
@@ -41,7 +39,7 @@ if (originalAxiosModule) {
   delete require.cache[axiosPath];
 }
 
-test("uses the configured client ID for the real verifier request", async () => {
+test("creates a DID-based Presentation Exchange request using Verify 0.18.2's API", async () => {
   let capturedRequest;
   axiosMock.post = async (url, body) => {
     capturedRequest = { url, body };
@@ -67,7 +65,9 @@ test("uses the configured client ID for the real verifier request", async () => 
   );
   assert.deepEqual(capturedRequest.body, {
     clientId: "did:web:verify.example",
-    presentationDefinition
+    presentationDefinition,
+    acceptVPWithoutHolderProof: false,
+    responseCodeValidationRequired: false
   });
   assert.deepEqual(response, presentationRequest);
 });
@@ -87,6 +87,29 @@ test("rejects an unconfigured verifier client ID without making a request", asyn
     }),
     {
       code: "VERIFIER_CLIENT_ID_NOT_CONFIGURED",
+      statusCode: 503
+    }
+  );
+  assert.equal(requestMade, false);
+});
+
+test("rejects a non-DID client ID for the DID-based Verify flow", async () => {
+  let requestMade = false;
+  axiosMock.post = async () => {
+    requestMade = true;
+  };
+  const adapter = new InjiVerifyAdapter({
+    baseUrl: "http://verify.example",
+    clientId: "verifier-client"
+  });
+
+  await assert.rejects(
+    adapter.createPresentationRequest({
+      clientId: "verifier-client",
+      presentationDefinition
+    }),
+    {
+      code: "VERIFIER_CLIENT_ID_NOT_DID",
       statusCode: 503
     }
   );
@@ -153,7 +176,7 @@ test("rejects a malformed presentation definition without making a request", asy
       clientId: "did:web:verify.example",
       presentationDefinition: { id: "definition" }
     }),
-    /presentationDefinition must include/
+    /presentationDefinition with a non-empty input_descriptors array/
   );
   assert.equal(requestMade, false);
 });
@@ -240,8 +263,47 @@ test("retrieves the detailed Verify result by transaction ID without requesting 
     statusCheckFilters: [],
     includeClaims: false
   });
-  assert.deepEqual(capturedRequest.config, { timeout: 15000 });
+  assert.equal(capturedRequest.config.timeout, 60000);
   assert.equal(result.allChecksSuccessful, true);
+});
+
+test("checks Verify's long-poll request status endpoint using the request ID", async () => {
+  let capturedRequest;
+  axiosMock.get = async (url, config) => {
+    capturedRequest = { url, config };
+    return { data: { status: "VP_SUBMITTED" } };
+  };
+  const adapter = new InjiVerifyAdapter({
+    baseUrl: "http://verify.example/v1/verify/",
+    clientId: "did:web:verify.example"
+  });
+
+  const status = await adapter.getPresentationRequestStatus({
+    requestId: "req/with spaces"
+  });
+
+  assert.equal(
+    capturedRequest.url,
+    "http://verify.example/v1/verify/vp-request/req%2Fwith%20spaces/status"
+  );
+  assert.equal(capturedRequest.config.timeout, 65000);
+  assert.deepEqual(status, { status: "VP_SUBMITTED" });
+});
+
+test("rejects malformed Verify request status responses", async () => {
+  const adapter = new InjiVerifyAdapter({
+    baseUrl: "http://verify.example",
+    clientId: "did:web:verify.example"
+  });
+  axiosMock.get = async () => ({ data: { status: "SUBMITTED" } });
+
+  await assert.rejects(
+    adapter.getPresentationRequestStatus({ requestId: "req-123" }),
+    {
+      code: "INVALID_VERIFIER_STATUS",
+      statusCode: 502
+    }
+  );
 });
 
 test("encodes transaction IDs when retrieving Verify results", async () => {

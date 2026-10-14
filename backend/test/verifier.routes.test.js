@@ -20,6 +20,10 @@ let baseUrl;
 let configuredClientId;
 let createRequestCalls;
 let savedRequest;
+const presentationDefinition = {
+  id: "definition",
+  input_descriptors: [{ id: "credential" }]
+};
 
 const runServiceMock = {
   getRun: () => currentRun,
@@ -45,6 +49,11 @@ const runServiceMock = {
       transactionId: presentationRequest.transactionId,
       authorizationRequest: presentationRequest
     };
+    currentRun.verificationStatus = "PENDING";
+  },
+  setRunVerificationStatus: (runId, status) => {
+    currentRun.verificationStatus = status;
+    return currentRun;
   }
 };
 
@@ -64,14 +73,8 @@ const verifierServiceMock = {
     return {
       requestId: "req-real-123",
       transactionId: "txn-real-456",
-      authorizationDetails: {
-        clientId: data.clientId,
-        responseType: "vp_token",
-        nonce: "nonce-from-verify",
-        responseMode: "direct_post",
-        responseUri: "https://verify.example/vp-submission/direct-post",
-        presentationDefinition: data.presentationDefinition
-      }
+      requestUri:
+        "https://verify.example/v1/verify/vp-request/req-real-123"
     };
   }
 };
@@ -144,12 +147,15 @@ function resetRun() {
 }
 
 async function createRequest(body = {}) {
+  const requestBody = Object.keys(body).length
+    ? body
+    : { presentationDefinition };
   return fetch(
     `${baseUrl}/api/verify/runs/RUN-VERIFY-TEST/request`,
     {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(body)
+      body: JSON.stringify(requestBody)
     }
   );
 }
@@ -205,6 +211,10 @@ test("uses and persists the configured client ID unchanged", async () => {
 
   assert.equal(response.status, 200);
   assert.equal(createRequestCalls[0].data.clientId, configuredClientId);
+  assert.deepEqual(
+    createRequestCalls[0].data.presentationDefinition,
+    presentationDefinition
+  );
   assert.equal(savedRequest.clientId, configuredClientId);
   assert.deepEqual(
     body.presentationRequest,
@@ -212,6 +222,11 @@ test("uses and persists the configured client ID unchanged", async () => {
   );
   assert.equal(body.presentationRequest.requestId, "req-real-123");
   assert.equal(body.presentationRequest.transactionId, "txn-real-456");
+  assert.equal(
+    body.presentationRequest.requestUri,
+    "https://verify.example/v1/verify/vp-request/req-real-123"
+  );
+  assert.equal(currentRun.verificationStatus, "PENDING");
   assert.equal(currentRun.presentationRequest.requestId, "req-real-123");
   assert.equal(currentRun.presentationRequest.transactionId, "txn-real-456");
   assert.deepEqual(
@@ -219,4 +234,35 @@ test("uses and persists the configured client ID unchanged", async () => {
     body.presentationRequest
   );
   assert.equal(body.exchange.status, "SUCCESS");
+});
+
+test("rejects DCQL input because Verify 0.18.2 requires a Presentation Exchange definition", async () => {
+  resetRun();
+  configuredClientId = "did:web:verify.example";
+
+  const response = await createRequest({
+    dcqlQuery: { credentials: [{ id: "credential" }] }
+  });
+  const body = await response.json();
+
+  assert.equal(response.status, 400);
+  assert.equal(body.errorCode, "INVALID_PRESENTATION_DEFINITION");
+  assert.equal(createRequestCalls.length, 0);
+  assert.equal(currentRun.verificationStatus, "ERROR");
+  assert.equal(body.exchange.status, "FAILED");
+});
+
+test("does not create a second Verify request for the same run", async () => {
+  resetRun();
+  configuredClientId = "did:web:verify.example";
+
+  const firstResponse = await createRequest();
+  assert.equal(firstResponse.status, 200);
+
+  const duplicateResponse = await createRequest();
+  const body = await duplicateResponse.json();
+
+  assert.equal(duplicateResponse.status, 409);
+  assert.equal(body.errorCode, "PRESENTATION_REQUEST_ALREADY_EXISTS");
+  assert.equal(createRequestCalls.length, 1);
 });

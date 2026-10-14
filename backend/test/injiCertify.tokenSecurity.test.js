@@ -66,6 +66,31 @@ test("sends the pre-authorized token exchange to Certify with form-encoded input
   );
 });
 
+test("does not invent a transaction code and forwards only a supplied code", async () => {
+  await adapter.createPreAuthorizedOffer({
+    credentialConfigurationId: "UniversityDegree"
+  });
+  assert.deepEqual(capturedRequest.body, {
+    credential_configuration_id: "UniversityDegree",
+    claims: {},
+    expires_in: 600
+  });
+
+  await adapter.createPreAuthorizedOffer({
+    credentialConfigurationId: "UniversityDegree",
+    txCode: "2468"
+  });
+  assert.equal(capturedRequest.body.tx_code, "2468");
+
+  await adapter.requestToken({
+    preAuthorizedCode: "pre-authorized-code"
+  });
+  assert.equal(
+    new URLSearchParams(capturedRequest.body).has("tx_code"),
+    false
+  );
+});
+
 test("does not log access tokens while using them for credential requests", async () => {
   const originalConsoleLog = console.log;
   const originalConsoleError = console.error;
@@ -89,6 +114,12 @@ test("does not log access tokens while using them for credential requests", asyn
     capturedRequest.url,
     "http://certify.example/v1/certify/issuance/credential"
   );
+  assert.deepEqual(capturedRequest.body, {
+    format: "ldp_vc",
+    credential_definition: { type: ["VerifiableCredential"] },
+    proof: { proof_type: "jwt", jwt: "proof-not-logged" }
+  });
+  assert.equal(capturedRequest.config.timeout, 15000);
   assert.equal(
     capturedRequest.config.headers.Authorization,
     `Bearer ${accessTokenValue}`

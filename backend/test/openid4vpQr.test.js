@@ -54,22 +54,7 @@ test("builds an OpenID4VP QR URI from a by-value response", () => {
     JSON.parse(params.get("presentation_definition")),
     presentationDefinition
   );
-  assert.deepEqual(JSON.parse(params.get("client_metadata")), {
-    client_name: clientId,
-    vp_formats: {
-      ldp_vp: {
-        proof_type: [
-          "Ed25519Signature2018",
-          "Ed25519Signature2020",
-          "RsaSignature2018"
-        ]
-      },
-      "vc+sd-jwt": {
-        "sd-jwt_alg_values": ["RS256", "ES256", "ES256K", "EdDSA"],
-        "kb-jwt_alg_values": ["RS256", "ES256", "ES256K", "EdDSA"]
-      }
-    }
-  });
+  assert.equal(params.has("client_metadata"), false);
 });
 
 test("preserves verifier-supplied client metadata", () => {
@@ -277,7 +262,7 @@ test("rejects missing or invalid verifier request data", () => {
       },
       clientId
     ),
-    /must include a presentationDefinition or presentationDefinitionUri/
+    /must include a presentationDefinition, presentationDefinitionUri, or dcqlQuery/
   );
   assert.throws(
     () => createAuthorizationRequestUri(

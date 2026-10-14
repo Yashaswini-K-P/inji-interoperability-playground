@@ -60,7 +60,7 @@ test.after(() => {
 
 test("includes the configured verifier client ID in the components API only", async () => {
   process.env.INJI_VERIFY_URL = "http://verify.example:8080";
-  process.env.INJI_VERIFY_CLIENT_ID = "test-verifier-client";
+  process.env.INJI_VERIFY_CLIENT_ID = "did:web:verify.example";
   process.env.PLAYGROUND_TEST_UNRELATED_SECRET =
     "must-not-appear-in-component-response";
 
@@ -93,7 +93,7 @@ test("includes the configured verifier client ID in the components API only", as
     assert.equal(response.status, 200);
     assert.equal(
       verifier.clientId,
-      "test-verifier-client"
+      "did:web:verify.example"
     );
     assert.equal(
       JSON.stringify(body).includes(
@@ -145,6 +145,21 @@ test("treats a missing or blank configured client ID as a configuration error", 
     () => verifierService.getVerifierClientId("inji-verify"),
     {
       code: "VERIFIER_CLIENT_ID_NOT_CONFIGURED",
+      statusCode: 503
+    }
+  );
+});
+
+test("rejects a configured non-DID client ID for the real Verify flow", () => {
+  process.env.INJI_VERIFY_CLIENT_ID = "test-verifier-client";
+
+  const verifierService =
+    loadVerifierServiceWithCurrentEnvironment();
+
+  assert.throws(
+    () => verifierService.getVerifierClientId("inji-verify"),
+    {
+      code: "VERIFIER_CLIENT_ID_NOT_DID",
       statusCode: 503
     }
   );

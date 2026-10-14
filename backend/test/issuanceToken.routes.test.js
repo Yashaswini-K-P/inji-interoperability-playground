@@ -22,11 +22,45 @@ let offerResult;
 let tokenResponse;
 let tokenError;
 let exchangeRecordingError;
+let currentIssuanceToken;
+let credentialResponse;
+let credentialError;
+let credentialConfiguration;
+let credentialMetadataError;
+let credentialRequestReserved;
+let credentialRequestSubmitted;
 let server;
 let baseUrl;
 
 const runServiceMock = {
   getRun: () => currentRun,
+  setRunIssuanceToken: (runId, token) => {
+    currentIssuanceToken = {
+      accessToken: token.accessToken,
+      cNonce: token.cNonce,
+      expiresAt: Date.now() + token.expiresIn * 1000
+    };
+  },
+  clearRunIssuanceToken: () => {
+    currentIssuanceToken = null;
+  },
+  getRunIssuanceToken: () => currentIssuanceToken,
+  reserveRunCredentialRequest: () => {
+    if (credentialRequestReserved || credentialRequestSubmitted) {
+      return false;
+    }
+    credentialRequestReserved = true;
+    return true;
+  },
+  releaseRunCredentialRequest: () => {
+    credentialRequestReserved = false;
+  },
+  completeRunCredentialRequest: () => {
+    credentialRequestReserved = false;
+    credentialRequestSubmitted = true;
+    currentIssuanceToken = null;
+  },
+  hasSubmittedRunCredentialRequest: () => credentialRequestSubmitted,
   addExchange: (runId, exchange) => {
     if (exchangeRecordingError) {
       throw exchangeRecordingError;
@@ -65,11 +99,21 @@ const issuanceServiceMock = {
   },
   requestCredential: async (...args) => {
     requestCredentialCalls.push(args);
-    return { credential: "must-not-be-issued" };
+    if (credentialError) {
+      throw credentialError;
+    }
+    return credentialResponse;
+  },
+  getCredentialConfiguration: async (...args) => {
+    if (credentialMetadataError) {
+      throw credentialMetadataError;
+    }
+    return credentialConfiguration;
   }
 };
 
 const walletServiceMock = {
+  clearPlaygroundCredentialOfferHandoff: () => {},
   createCredentialRequest: async (...args) => {
     walletCredentialRequestCalls.push(args);
     throw new Error("Unexpected wallet credential request");
@@ -143,6 +187,7 @@ function resetRun() {
     scenario: {
       issuer: "inji-certify",
       credential: "UniversityDegree",
+      format: "ldp_vc",
       wallet: "inji-mobile"
     },
     exchanges: [{
@@ -166,12 +211,53 @@ function resetRun() {
   };
   tokenError = null;
   exchangeRecordingError = null;
+  currentIssuanceToken = null;
+  credentialError = null;
+  credentialMetadataError = null;
+  credentialRequestReserved = false;
+  credentialRequestSubmitted = false;
+  credentialConfiguration = {
+    id: "UniversityDegree",
+    format: "ldp_vc",
+    credentialDefinition: {
+      type: ["VerifiableCredential", "UniversityDegree"]
+    },
+    proofAlgorithms: ["RS256"]
+  };
+  credentialResponse = {
+    format: "ldp_vc",
+    credential: {
+      type: ["VerifiableCredential", "UniversityDegree"]
+    }
+  };
   tokenResponse = {
     access_token: accessTokenValue,
     refresh_token: refreshTokenValue,
     token_type: "Bearer",
     expires_in: 600,
     c_nonce: "nonce-not-returned"
+  };
+}
+
+function createWalletProof(cNonce = "nonce-not-returned") {
+  const encode = (value) =>
+    Buffer.from(JSON.stringify(value)).toString("base64url");
+
+  return {
+    proof_type: "jwt",
+    jwt: [
+      encode({
+        alg: "RS256",
+        typ: "openid4vci-proof+jwt",
+        jwk: { kty: "EC", crv: "P-256", x: "x", y: "y" }
+      }),
+      encode({
+        aud: "http://certify.example",
+        iat: Math.floor(Date.now() / 1000),
+        nonce: cNonce
+      }),
+      "signature"
+    ].join(".")
   };
 }
 
@@ -182,6 +268,27 @@ async function requestRunToken(body) {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body)
+    }
+  );
+}
+
+async function exchangeRunToken() {
+  currentRun.offer = {
+    credentialOfferUri: "openid-credential-offer://certify/offer-1"
+  };
+  return requestRunToken({
+    preAuthorizedCode: "pre-authorized-code",
+    txCode: "1234"
+  });
+}
+
+async function requestRunCredential(body) {
+  return fetch(
+    `${baseUrl}/api/issuance/runs/RUN-TOKEN-TEST/credential`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      ...(body ? { body: JSON.stringify(body) } : {})
     }
   );
 }
@@ -211,7 +318,8 @@ test("forwards expected token inputs and returns only safe token metadata", asyn
   assert.deepEqual(body.token, {
     tokenType: "Bearer",
     expiresIn: 600,
-    hasCNonce: true
+    hasCNonce: true,
+    cNonce: "nonce-not-returned"
   });
   for (const output of [serialized, persistedRun, exchangeLog]) {
     assert.equal(output.includes(accessTokenValue), false);
@@ -288,50 +396,201 @@ test("records malformed token responses as failed without exposing token values"
   assert.equal(currentRun.status, "FAILED");
 });
 
-test("records unsupported wallet credential requests and returns a safe continuation", async () => {
+test("keeps credential issuance pending when the run has no access token", async () => {
   resetRun();
+  currentRun.offer = {
+    credentialOfferUri: "openid-credential-offer://certify/offer-1"
+  };
 
-  const response = await fetch(
-    `${baseUrl}/api/issuance/runs/RUN-TOKEN-TEST/credential`,
-    { method: "POST" }
-  );
+  const response = await requestRunCredential();
   const body = await response.json();
   const exchange = exchanges[0];
 
-  assert.equal(response.status, 501);
-  assert.equal(body.errorCode, "CREDENTIAL_REQUEST_UNSUPPORTED");
-  assert.equal(body.diagnostic.code, "CREDENTIAL_REQUEST_UNSUPPORTED");
-  assert.equal(body.diagnostic.owner, "selected-wallet");
-  assert.deepEqual(body.continuation, {
-    method: "GET",
-    endpoint: "/api/wallet/runs/RUN-TOKEN-TEST/continue",
-    requiredState: "CREDENTIAL_OFFER_CREATED",
-    status: "PENDING_EXTERNAL_ACTION",
-    actionRequiredCode: "SCAN_CREDENTIAL_OFFER_IN_INJI_MOBILE"
-  });
-  assert.equal(exchange.status, "UNSUPPORTED");
-  assert.equal(exchange.componentId, "inji-mobile");
+  assert.equal(response.status, 202);
+  assert.equal(body.status, "PENDING_EXTERNAL_ACTION");
+  assert.equal(body.errorCode, "ACCESS_TOKEN_REQUIRED");
+  assert.equal(body.actionRequiredCode, "COMPLETE_WALLET_TOKEN_EXCHANGE");
+  assert.equal(exchange.status, "PENDING");
+  assert.equal(exchange.componentId, "inji-certify");
   assert.equal(exchange.protocol, "OpenID4VCI");
-  assert.equal(exchange.format, null);
-  assert.equal(typeof exchange.timestamp, "string");
-  assert.equal(exchange.diagnostic.code, "CREDENTIAL_REQUEST_UNSUPPORTED");
+  assert.equal(exchange.format, "ldp_vc");
   assert.equal(Object.hasOwn(currentRun, "token"), false);
   assert.equal(requestTokenCalls.length, 0);
   assert.equal(exchanges.length, 1);
   assert.equal(requestCredentialCalls.length, 0);
   assert.equal(walletCredentialRequestCalls.length, 0);
   assert.equal(currentRun.status, "IN_PROGRESS");
-  assert.equal(currentRun.exchanges.length, 2);
 });
 
-test("returns a safe error when an unsupported wallet operation cannot be recorded", async () => {
+test("keeps credential issuance pending until the wallet supplies its signed proof", async () => {
+  resetRun();
+  await exchangeRunToken();
+
+  const response = await requestRunCredential();
+  const body = await response.json();
+
+  assert.equal(response.status, 202);
+  assert.equal(body.errorCode, "WALLET_PROOF_REQUIRED");
+  assert.equal(body.actionRequiredCode, "SUBMIT_WALLET_SIGNED_PROOF_JWT");
+  assert.equal(exchanges.at(-1).status, "PENDING");
+  assert.equal(requestCredentialCalls.length, 0);
+  assert.equal(currentRun.status, "IN_PROGRESS");
+});
+
+test("submits a valid wallet proof using the run token and metadata configuration", async () => {
+  resetRun();
+  await exchangeRunToken();
+
+  const proof = createWalletProof();
+  const response = await requestRunCredential({ proof });
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.success, true);
+  assert.equal(body.status, "ISSUED");
+  assert.deepEqual(body.credential, credentialResponse);
+  assert.deepEqual(requestCredentialCalls, [[
+    "inji-certify",
+    {
+      accessToken: accessTokenValue,
+      format: "ldp_vc",
+      credentialDefinition: credentialConfiguration.credentialDefinition,
+      doctype: null,
+      vct: null,
+      proof
+    }
+  ]]);
+  assert.equal(exchanges.at(-1).status, "SUCCESS");
+  assert.equal(credentialRequestSubmitted, true);
+  const publicOutput = JSON.stringify({ body, exchanges, run: currentRun });
+  assert.equal(publicOutput.includes(accessTokenValue), false);
+  assert.equal(publicOutput.includes(proof.jwt), false);
+});
+
+test("does not resubmit a credential request after a successful issuance", async () => {
+  resetRun();
+  await exchangeRunToken();
+  await requestRunCredential({ proof: createWalletProof() });
+
+  const response = await requestRunCredential({ proof: createWalletProof() });
+  const body = await response.json();
+
+  assert.equal(response.status, 409);
+  assert.equal(body.errorCode, "CREDENTIAL_REQUEST_ALREADY_SUBMITTED");
+  assert.equal(requestCredentialCalls.length, 1);
+});
+
+test("records Certify rejection without exposing upstream response details", async () => {
+  resetRun();
+  await exchangeRunToken();
+  credentialError = Object.assign(new Error("private upstream detail"), {
+    response: {
+      status: 400,
+      data: { error: "invalid_proof", error_description: "sensitive response" }
+    }
+  });
+
+  const response = await requestRunCredential({
+    proof: createWalletProof()
+  });
+  const body = await response.json();
+
+  assert.equal(response.status, 502);
+  assert.equal(body.errorCode, "ISSUER_CREDENTIAL_REQUEST_FAILED");
+  assert.equal(body.diagnostic.upstreamStatus, 400);
+  assert.equal(body.exchange.status, "FAILED");
+  assert.equal(JSON.stringify(body).includes("sensitive response"), false);
+  assert.equal(requestCredentialCalls.length, 1);
+});
+
+test("keeps deferred Certify credential responses pending instead of reporting success", async () => {
+  resetRun();
+  await exchangeRunToken();
+  credentialResponse = { acceptance_token: "deferred-token" };
+
+  const response = await requestRunCredential({
+    proof: createWalletProof()
+  });
+  const body = await response.json();
+
+  assert.equal(response.status, 202);
+  assert.equal(body.errorCode, "CREDENTIAL_ACCEPTANCE_PENDING");
+  assert.equal(body.status, "PENDING_EXTERNAL_ACTION");
+  assert.equal(exchanges.at(-1).status, "PENDING");
+  assert.equal(credentialRequestSubmitted, true);
+  assert.equal(JSON.stringify(body).includes("deferred-token"), false);
+});
+
+test("rejects malformed Certify responses without a credential or acceptance token", async () => {
+  resetRun();
+  await exchangeRunToken();
+  credentialResponse = { format: "ldp_vc" };
+
+  const response = await requestRunCredential({
+    proof: createWalletProof()
+  });
+  const body = await response.json();
+
+  assert.equal(response.status, 502);
+  assert.equal(body.errorCode, "INVALID_ISSUER_CREDENTIAL_RESPONSE");
+  assert.equal(body.exchange.status, "FAILED");
+  assert.equal(credentialRequestSubmitted, true);
+});
+
+test("does not submit a proof with a stale or malformed c_nonce", async () => {
+  resetRun();
+  await exchangeRunToken();
+
+  const response = await requestRunCredential({
+    proof: createWalletProof("stale-nonce")
+  });
+  const body = await response.json();
+
+  assert.equal(response.status, 400);
+  assert.equal(body.errorCode, "INVALID_PROOF_JWT");
+  assert.equal(exchanges.at(-1).status, "FAILED");
+  assert.equal(requestCredentialCalls.length, 0);
+});
+
+test("returns an actionable metadata error without submitting a credential request", async () => {
+  resetRun();
+  await exchangeRunToken();
+  credentialMetadataError = new Error("issuer metadata unavailable");
+
+  const response = await requestRunCredential({
+    proof: createWalletProof()
+  });
+  const body = await response.json();
+
+  assert.equal(response.status, 502);
+  assert.equal(body.errorCode, "ISSUER_CREDENTIAL_METADATA_UNAVAILABLE");
+  assert.equal(body.exchange.status, "FAILED");
+  assert.equal(requestCredentialCalls.length, 0);
+});
+
+test("reports a missing Certify credential configuration as unsupported", async () => {
+  resetRun();
+  await exchangeRunToken();
+  credentialMetadataError = new Error(
+    "Credential configuration not found: UniversityDegree"
+  );
+
+  const response = await requestRunCredential({
+    proof: createWalletProof()
+  });
+  const body = await response.json();
+
+  assert.equal(response.status, 422);
+  assert.equal(body.errorCode, "CREDENTIAL_CONFIGURATION_NOT_FOUND");
+  assert.equal(body.exchange.status, "UNSUPPORTED");
+  assert.equal(requestCredentialCalls.length, 0);
+});
+
+test("returns a safe error when a pending credential operation cannot be recorded", async () => {
   resetRun();
   exchangeRecordingError = new Error("storage failure");
 
-  const response = await fetch(
-    `${baseUrl}/api/issuance/runs/RUN-TOKEN-TEST/credential`,
-    { method: "POST" }
-  );
+  const response = await requestRunCredential();
   const body = await response.json();
 
   assert.equal(response.status, 500);

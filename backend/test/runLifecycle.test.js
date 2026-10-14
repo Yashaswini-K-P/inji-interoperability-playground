@@ -65,7 +65,45 @@ test("keeps prepared wallet handoffs in progress and marks failed steps failed",
     presentationProtocol: "openid4vp"
   });
 
+  test("persists a correlated wallet receipt without storing credential contents", () => {
+    const run = runService.createRun({
+      issuer: "inji-certify",
+      credential: "employee_sd_jwt",
+      format: "vc+sd-jwt",
+      wallet: "inji-mobile",
+      verifier: "inji-verify",
+      presentationProtocol: "openid4vp"
+    });
+
+    const receipt = runService.recordWalletCredentialReceipt(run.runId, {
+      credentialConfigurationId: "employee_sd_jwt",
+      format: "vc+sd-jwt"
+    });
+    const updatedRun = runService.getRun(run.runId);
+    const persistedRun = JSON.parse(persistedRuns)[run.runId];
+
+    assert.equal(receipt.issuer, "inji-certify");
+    assert.equal(receipt.wallet, "inji-mobile");
+    assert.equal(receipt.credentialConfigurationId, "employee_sd_jwt");
+    assert.equal(updatedRun.issuanceStatus, "STORED");
+    assert.equal(updatedRun.status, "IN_PROGRESS");
+    assert.equal(updatedRun.exchanges[0].status, "SUCCESS");
+    assert.equal(updatedRun.exchanges[0].runId, run.runId);
+    assert.equal(persistedRun.issuanceStatus, "STORED");
+    assert.equal(JSON.stringify(persistedRun).includes("credentialJwt"), false);
+    assert.equal(JSON.stringify(persistedRun).includes("accessToken"), false);
+    assert.throws(
+      () =>
+        runService.recordWalletCredentialReceipt(run.runId, {
+          credentialConfigurationId: "different-credential",
+          format: "vc+sd-jwt"
+        }),
+      /does not match/
+    );
+  });
+
   assert.equal(run.status, "IN_PROGRESS");
+  assert.equal(run.verificationStatus, null);
 
   const readyStep = runService.addExchange(run.runId, {
     stepName: "Wallet Handoff",
@@ -107,6 +145,14 @@ test("keeps prepared wallet handoffs in progress and marks failed steps failed",
     },
     "did:web:verify.example"
   );
+  assert.equal(
+    runService.getRun(run.runId).presentationRequest.state,
+    "req-live"
+  );
+  assert.equal(
+    runService.getRun(run.runId).presentationRequest.nonce,
+    null
+  );
   runService.addExchange(run.runId, {
     stepName: "Presentation Request Creation",
     status: "SUCCESS",
@@ -117,6 +163,7 @@ test("keeps prepared wallet handoffs in progress and marks failed steps failed",
   const recoveredRun = runService.getRun(run.runId);
   const persistedRun = JSON.parse(persistedRuns)[run.runId];
   assert.equal(recoveredRun.status, "IN_PROGRESS");
+  assert.equal(recoveredRun.verificationStatus, "PENDING");
   assert.equal(recoveredRun.result, null);
   assert.equal(recoveredRun.verificationResult, null);
   assert.equal(recoveredRun.exchanges.length, 3);
@@ -150,6 +197,14 @@ test("stores only the authoritative verification summary and sets the terminal P
     },
     "did:web:verify.example"
   );
+  assert.throws(
+    () => runService.setRunVerificationResult(run.runId, {
+      transactionId: "txn-from-another-run",
+      allChecksSuccessful: true,
+      credentialCount: 1
+    }),
+    /does not match the run's Verify request/
+  );
   const resultRun = runService.setRunVerificationResult(
     run.runId,
     {
@@ -165,6 +220,7 @@ test("stores only the authoritative verification summary and sets the terminal P
   );
   assert.equal(resultRun.presentationRequest.requestId, "req-lifecycle");
   assert.equal(resultRun.status, "COMPLETED");
+  assert.equal(resultRun.verificationStatus, "VERIFIED");
   assert.equal(resultRun.result, "PASS");
   const persistedRun = JSON.parse(persistedRuns)[run.runId];
   assert.equal(
@@ -179,6 +235,44 @@ test("stores only the authoritative verification summary and sets the terminal P
     resultRun.verificationResult,
     persistedRun.verificationResult
   );
+});
+
+test("persists DID request URI, request/transaction IDs, state, nonce and run correlation", () => {
+  const run = runService.createRun({
+    issuer: "inji-certify",
+    credential: "credential",
+    wallet: "inji-mobile",
+    verifier: "inji-verify",
+    presentationProtocol: "openid4vp"
+  });
+  const request = {
+    requestId: "req-correlated",
+    transactionId: "txn-correlated",
+    requestUri: "https://verify.example/v1/verify/vp-request/req-correlated",
+    expiresAt: 1900000000000,
+    authorizationDetails: {
+      state: "explicit-state",
+      nonce: "signed-request-nonce"
+    }
+  };
+
+  const updatedRun = runService.setRunPresentationRequest(
+    run.runId,
+    request,
+    "did:web:verify.example"
+  );
+
+  assert.equal(updatedRun.presentationRequest.requestId, "req-correlated");
+  assert.equal(updatedRun.presentationRequest.transactionId, "txn-correlated");
+  assert.equal(updatedRun.presentationRequest.requestUri, request.requestUri);
+  assert.equal(updatedRun.presentationRequest.state, "explicit-state");
+  assert.equal(updatedRun.presentationRequest.nonce, "signed-request-nonce");
+  assert.equal(updatedRun.presentationRequest.expiresAt, request.expiresAt);
+  assert.equal(updatedRun.presentationRequest.verifierId, "inji-verify");
+  assert.equal(updatedRun.verificationStatus, "PENDING");
+  const persistedRun = JSON.parse(persistedRuns)[run.runId];
+  assert.equal(persistedRun.presentationRequest.transactionId, "txn-correlated");
+  assert.equal(persistedRun.presentationRequest.requestUri, request.requestUri);
 });
 
 test("records verifier failures with a safe diagnostic and component identity", () => {
@@ -233,6 +327,7 @@ test("stores a verifier-confirmed presentation rejection without credential data
   );
 
   assert.equal(resultRun.status, "FAILED");
+  assert.equal(resultRun.verificationStatus, "REJECTED");
   assert.equal(resultRun.result, "FAIL");
   assert.deepEqual(resultRun.verificationFailure, {
     code: "INVALID_VP_TOKEN",

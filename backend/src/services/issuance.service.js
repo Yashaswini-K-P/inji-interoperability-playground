@@ -1,5 +1,6 @@
 const {
-  getIssuerAdapter
+  getIssuerAdapter,
+  getCredentialConfiguration
 } = require("./issuer.service");
 
 async function createPreAuthorizedOffer(
@@ -8,7 +9,7 @@ async function createPreAuthorizedOffer(
     credentialConfigurationId,
     claims = {},
     expiresIn = 600,
-    txCode = "1234"
+    txCode
   }
 ) {
   const adapter = getIssuerAdapter(issuerId);
@@ -38,7 +39,7 @@ async function createPreAuthorizedOfferForRun(
     credentialConfigurationId,
     claims = {},
     expiresIn = 600,
-    txCode = "1234"
+    txCode
   }
 ) {
   const adapter = getIssuerAdapter(issuerId);
@@ -96,6 +97,8 @@ async function requestCredential(
     accessToken,
     format,
     credentialDefinition,
+    doctype,
+    vct,
     proof
   }
 ) {
@@ -105,6 +108,8 @@ async function requestCredential(
     accessToken,
     format,
     credentialDefinition,
+    doctype,
+    vct,
     proof
   });
 }
@@ -114,5 +119,6 @@ module.exports = {
   getCredentialOffer,
   createPreAuthorizedOfferForRun,
   requestToken,
-  requestCredential
+  requestCredential,
+  getCredentialConfiguration
 };

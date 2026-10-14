@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import {
   Activity,
@@ -63,25 +63,16 @@ async function apiRequest(
   if (!response.ok) {
     const body = asObject(data);
     const diagnostic = asObject(body.diagnostic);
-    const upstreamDetails = asObject(diagnostic.upstreamDetails);
 
-    // Prefer the verifier's actual response (for example UNKNOWN_FIELD)
-    // over the adapter's generic Axios message (for example HTTP 400).
     const message =
-      (typeof upstreamDetails.errorMessage === "string" &&
-        upstreamDetails.errorMessage) ||
-      (typeof upstreamDetails.message === "string" &&
-        upstreamDetails.message) ||
       (typeof body.message === "string" && body.message) ||
       (typeof body.error === "string" && body.error) ||
       (typeof body.details === "string" && body.details) ||
       (typeof body.error_description === "string" &&
         body.error_description) ||
       `Request failed with HTTP ${response.status}`;
-
     const errorCode =
-      (typeof upstreamDetails.errorCode === "string" &&
-        upstreamDetails.errorCode) ||
+      (typeof body.errorCode === "string" && body.errorCode) ||
       (typeof diagnostic.code === "string" && diagnostic.code) ||
       "";
 
@@ -97,6 +88,20 @@ function asObject(value: unknown): JsonObject {
   }
 
   return {};
+}
+
+function hideWalletCallbackCapability(value: unknown): unknown {
+  const response = asObject(value);
+  const wallet = asObject(response.wallet);
+  if (!findString(wallet, ["qrPayload"])) return value;
+
+  return {
+    ...response,
+    wallet: {
+      ...wallet,
+      qrPayload: "[redacted; capability is carried only inside the QR]",
+    },
+  };
 }
 
 function findString(
@@ -163,7 +168,13 @@ function normalizeStatus(value: unknown): TestStatus {
   if (["ERROR", "UNAVAILABLE"].includes(status)) return "ERROR";
 
   if (
-    ["PENDING", "PROCESSING", "IN_PROGRESS", "WAITING"].includes(status)
+    [
+      "PENDING",
+      "PROCESSING",
+      "IN_PROGRESS",
+      "WAITING",
+      "SUBMITTED",
+    ].includes(status)
   ) {
     return "PENDING";
   }
@@ -183,8 +194,6 @@ function getQrPayload(value: unknown): string | undefined {
     "qr_payload",
     "presentationUri",
     "presentation_uri",
-    "requestUri",
-    "request_uri",
     "uri",
   ];
 
@@ -278,6 +287,7 @@ export default function App() {
     useState("ldp_vc");
   const [issuanceFlow, setIssuanceFlow] =
     useState("pre_authorized_code");
+  const [txCode, setTxCode] = useState("");
 
   const [runId, setRunId] = useState("");
   const [runData, setRunData] = useState<unknown>(null);
@@ -295,19 +305,16 @@ export default function App() {
   const [resultStatus, setResultStatus] = useState<TestStatus>("UNKNOWN");
   const [activeTab, setActiveTab] = useState("Dashboard");
 
-  // This editor contains a DCQL query for the Inji Verify OpenID4VP v2 API.
-  // The chosen format and credential types must match the credential and wallet.
-  const [dcqlQueryText, setDcqlQueryText] = useState(
+  // Inji Verify 0.18.x accepts Presentation Exchange definitions for VP requests.
+  const [presentationDefinitionText, setPresentationDefinitionText] = useState(
     JSON.stringify(
       {
-        credentials: [
+        id: "playground-presentation-definition",
+        input_descriptors: [
           {
             id: "requested-credential",
-            format: "ldp_vc",
-            meta: {
-              type_values: [["VerifiableCredential"]],
-            },
-            require_cryptographic_holder_binding: true,
+            format: { ldp_vc: {} },
+            constraints: { fields: [{ path: ["$.type[*]"] }] },
           },
         ],
       },
@@ -392,7 +399,7 @@ export default function App() {
     void refreshRegistry();
   }, []);
 
-  async function refreshRun(id = runId) {
+  const refreshRun = useCallback(async (id = runId) => {
     if (!id) return;
 
     const response = await apiRequest(
@@ -404,7 +411,33 @@ export default function App() {
 
     setRunData(run);
     setSelectedPayload(response);
-  }
+  }, [runId]);
+
+  const runObject = asObject(runData);
+  const issuanceStatus =
+    findString(runObject, ["issuanceStatus"])?.toUpperCase() || "PENDING";
+
+  useEffect(() => {
+    if (
+      !runId ||
+      issuanceHandoffData === null ||
+      issuanceStatus === "STORED"
+    ) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      void refreshRun(runId).catch((err) => {
+        setError(
+          `Unable to refresh the wallet issuance status: ${
+            err instanceof Error ? err.message : "Unknown error"
+          }`,
+        );
+      });
+    }, 4000);
+
+    return () => window.clearInterval(timer);
+  }, [runId, issuanceHandoffData, issuanceStatus, refreshRun]);
 
   async function startRun() {
     if (!credentialId) {
@@ -506,7 +539,7 @@ export default function App() {
           credentialConfigurationId: credentialId,
           claims: {},
           expiresIn: 600,
-          txCode: "1234",
+          ...(txCode ? { txCode } : {}),
         }),
       },
     );
@@ -549,7 +582,7 @@ export default function App() {
       );
 
       setIssuanceHandoffData(data);
-      setSelectedPayload(data);
+      setSelectedPayload(hideWalletCallbackCapability(data));
       setNotice(
         "Issuance handoff prepared. Credential receipt remains unconfirmed.",
       );
@@ -576,24 +609,26 @@ export default function App() {
       return;
     }
 
-    let dcqlQuery: unknown;
+    let presentationDefinition: unknown;
 
     try {
-      dcqlQuery = JSON.parse(dcqlQueryText);
+      presentationDefinition = JSON.parse(presentationDefinitionText);
     } catch {
-      setError("DCQL query must contain valid JSON.");
+      setError("Presentation definition must contain valid JSON.");
       return;
     }
 
-    const dcqlQueryObject = asObject(dcqlQuery);
+    const presentationDefinitionObject = asObject(
+      presentationDefinition,
+    );
 
     if (
-      !Array.isArray(dcqlQueryObject.credentials) ||
-      dcqlQueryObject.credentials.length === 0
+      typeof presentationDefinitionObject.id !== "string" ||
+      !Array.isArray(presentationDefinitionObject.input_descriptors) ||
+      presentationDefinitionObject.input_descriptors.length === 0
     ) {
       setError(
-        'DCQL query must contain a non-empty "credentials" array. ' +
-          'Do not use the old "input_descriptors" presentation-definition format.',
+        'Presentation definition must contain an "id" and a non-empty "input_descriptors" array.',
       );
       return;
     }
@@ -608,7 +643,7 @@ export default function App() {
         {
           method: "POST",
           body: JSON.stringify({
-            dcqlQuery,
+            presentationDefinition,
           }),
         },
       );
@@ -616,7 +651,7 @@ export default function App() {
       setVerifyData(data);
       setSelectedPayload(data);
       setNotice(
-        "Presentation request generated. No verification outcome is implied.",
+        "DID-based Verify request generated. The wallet retrieves the signed request from its request URI; no verification outcome is implied.",
       );
 
       try {
@@ -728,11 +763,11 @@ export default function App() {
     }
   }
 
-  const offerQr = getQrPayload(offerData);
-  const requestQr = getQrPayload(verifyData);
+  const offerQr =
+    issuanceHandoffData !== null
+      ? getQrPayload(issuanceHandoffData)
+      : undefined;
   const presentationQr = getQrPayload(presentationData);
-
-  const runObject = asObject(runData);
 
   const exchanges = findArray(
     runObject.exchanges ?? runObject.exchangeHistory,
@@ -755,9 +790,11 @@ export default function App() {
     },
     {
       title: "Credential received by wallet",
-      status: "PENDING",
+      status: issuanceStatus === "STORED" ? "PASS" : "PENDING",
       description:
-        "Requires evidence from the actual wallet or backend.",
+        issuanceStatus === "STORED"
+          ? "The wallet confirmed the credential is present in its encrypted store."
+          : "Waiting for the wallet to finish issuance and confirm encrypted storage.",
     },
     {
       title: "Presentation request generated",
@@ -1105,13 +1142,34 @@ export default function App() {
                 icon={<FileCheck2 size={19} />}
               >
                 <p className="panel-description">
-                  Generate an issuance offer and prepare the wallet handoff.
+                  Generate an issuance offer and prepare a wallet-aware QR.
+                  Inji Mobile completes token exchange, proof signing, and
+                  credential storage using its native VCI client.
                 </p>
 
                 <div className="operation-status">
                   <span>Current run</span>
                   <strong>{runId || "Create a test run first"}</strong>
                 </div>
+                <div className="operation-status">
+                  <span>Wallet credential status</span>
+                  <strong>{issuanceStatus}</strong>
+                </div>
+
+                <label className="form-field">
+                  <span>Certify transaction code (optional)</span>
+                  <input
+                    type="password"
+                    autoComplete="off"
+                    value={txCode}
+                    onChange={(event) => setTxCode(event.target.value)}
+                    placeholder="Only if required by the issuer"
+                  />
+                  <small>
+                    If Certify requires a transaction code, enter the same
+                    value in Inji Mobile when prompted.
+                  </small>
+                </label>
 
                 <div className="button-stack">
                   <button
@@ -1140,17 +1198,21 @@ export default function App() {
                 <div className="disclaimer">
                   <CircleAlert size={16} />
                   <p>
-                    An offer is not proof that a credential has been received
-                    by the wallet.
+                    Configure backend PLAYGROUND_PUBLIC_URL with the phone-
+                    reachable HTTPS tunnel origin. Scan the prepared QR using
+                    the playground-enabled local Inji Mobile build; the plain
+                    Certify offer QR cannot report a correlated outcome.
                   </p>
                 </div>
 
                 {offerQr && (
                   <div className="qr-panel">
                     <QRCodeSVG value={offerQr} size={176} />
-                    <strong>Credential offer QR</strong>
-                    <span>Scan using a compatible wallet</span>
-                    <code className="qr-uri">{offerQr}</code>
+                    <strong>Inji Mobile issuance handoff QR</strong>
+                    <span>
+                      Scan in the playground-enabled Inji Mobile app; then
+                      approve the issuer and any transaction-code prompt.
+                    </span>
                   </div>
                 )}
 
@@ -1161,12 +1223,6 @@ export default function App() {
                   </details>
                 )}
 
-                {issuanceHandoffData !== null && (
-                  <details>
-                    <summary>View issuance handoff response</summary>
-                    <JsonViewer value={issuanceHandoffData} />
-                  </details>
-                )}
               </Panel>
 
               <Panel
@@ -1175,16 +1231,17 @@ export default function App() {
               >
                 <p className="panel-description">
                   Configure a presentation request and prepare the wallet
-                  handoff.
+                  handoff. Result retrieval waits for Verify's submission
+                  status (up to its configured long-poll timeout).
                 </p>
 
                 <label className="form-field">
-                  <span>DCQL query (JSON)</span>
+                  <span>Presentation definition (JSON)</span>
                   <textarea
                     className="definition-editor"
-                    value={dcqlQueryText}
+                    value={presentationDefinitionText}
                     onChange={(event) =>
-                      setDcqlQueryText(event.target.value)
+                      setPresentationDefinitionText(event.target.value)
                     }
                     spellCheck={false}
                   />
@@ -1222,15 +1279,6 @@ export default function App() {
                     Retrieve Verification Result
                   </button>
                 </div>
-
-                {requestQr && (
-                  <div className="qr-panel">
-                    <QRCodeSVG value={requestQr} size={176} />
-                    <strong>Presentation request QR</strong>
-                    <span>Ready for wallet handoff</span>
-                    <code className="qr-uri">{requestQr}</code>
-                  </div>
-                )}
 
                 {presentationQr && (
                   <div className="qr-panel">

@@ -339,15 +339,6 @@ function createAuthorizationRequestUri(
   const authorizationUri =
     `${DEFAULT_PROTOCOL}authorize?${params.toString()}`;
 
-  console.log("WALLET AUTHORIZATION URI CREATED", {
-    requestFormat: hasDcqlQuery
-      ? "dcql_query"
-      : hasDefinitionUri
-        ? "presentation_definition_uri"
-        : "presentation_definition",
-    clientId,
-  });
-
   return authorizationUri;
 }
 

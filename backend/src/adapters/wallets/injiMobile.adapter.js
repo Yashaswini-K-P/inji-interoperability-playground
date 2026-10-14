@@ -16,6 +16,7 @@ class InjiMobileAdapter {
       capabilities: {
         createCredentialOfferContinuation: true,
         createPresentationRequestContinuation: true,
+        reportsCredentialStorage: true,
         createCredentialRequest: false
       }
     };

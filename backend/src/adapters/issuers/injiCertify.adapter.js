@@ -1,4 +1,5 @@
 const axios = require("axios");
+const UPSTREAM_TIMEOUT_MS = 15000;
 
 class InjiCertifyAdapter {
   constructor(config) {
@@ -8,7 +9,9 @@ class InjiCertifyAdapter {
   async getMetadata() {
     const url = `${this.config.baseUrl}/.well-known/openid-credential-issuer`;
 
-    const response = await axios.get(url);
+    const response = await axios.get(url, {
+      timeout: UPSTREAM_TIMEOUT_MS
+    });
 
     return response.data;
   }
@@ -25,7 +28,9 @@ class InjiCertifyAdapter {
         format: configuration.format,
         scope: configuration.scope,
         credentialDefinition:
-      configuration.credential_definition || null,
+          configuration.credential_definition || null,
+        doctype: configuration.doctype || null,
+        vct: configuration.vct || null,
         bindingMethods:
           configuration.cryptographic_binding_methods_supported || [],
         signingAlgorithms:
@@ -44,19 +49,23 @@ class InjiCertifyAdapter {
     credentialConfigurationId,
     claims = {},
     expiresIn = 600,
-    txCode = "1234"
+    txCode
   }) {
     const url =
       `${this.config.baseUrl}/v1/certify/pre-authorized-data`;
 
+    const requestBody = {
+      credential_configuration_id: credentialConfigurationId,
+      claims,
+      expires_in: expiresIn
+    };
+    if (typeof txCode === "string" && txCode.length > 0) {
+      requestBody.tx_code = txCode;
+    }
+
     const response = await axios.post(
       url,
-      {
-        credential_configuration_id: credentialConfigurationId,
-        claims,
-        expires_in: expiresIn,
-        tx_code: txCode
-      },
+      requestBody,
       {
         headers: {
           "Content-Type": "application/json"
@@ -90,14 +99,18 @@ class InjiCertifyAdapter {
     preAuthorizedCode,
     txCode
   }) {
+    const tokenRequest = new URLSearchParams({
+      grant_type:
+        "urn:ietf:params:oauth:grant-type:pre-authorized_code",
+      "pre-authorized_code": preAuthorizedCode
+    });
+    if (typeof txCode === "string" && txCode.length > 0) {
+      tokenRequest.append("tx_code", txCode);
+    }
+
     const response = await axios.post(
       `${this.config.baseUrl}/v1/certify/oauth/token`,
-      new URLSearchParams({
-        grant_type:
-          "urn:ietf:params:oauth:grant-type:pre-authorized_code",
-        "pre-authorized_code": preAuthorizedCode,
-        tx_code: txCode
-      }).toString(),
+      tokenRequest.toString(),
       {
         headers: {
           "Content-Type":
@@ -114,26 +127,33 @@ class InjiCertifyAdapter {
     accessToken,
     format,
     credentialDefinition,
+    doctype,
+    vct,
     proof
   }) {
     const response = await axios.post(
-    `${this.config.baseUrl}/v1/certify/issuance/credential`,
-    {
-      format,
-      credential_definition: credentialDefinition,
-      proof
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-        Accept: "application/json"
+      `${this.config.baseUrl}/v1/certify/issuance/credential`,
+      {
+        format,
+        ...(credentialDefinition
+          ? { credential_definition: credentialDefinition }
+          : {}),
+        ...(doctype ? { doctype } : {}),
+        ...(vct ? { vct } : {}),
+        proof
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+          Accept: "application/json"
+        },
+        timeout: UPSTREAM_TIMEOUT_MS
       }
-    }
-  );
+    );
 
-  return response.data;
-}
+    return response.data;
+  }
 }
 
 module.exports = InjiCertifyAdapter;

@@ -2,11 +2,14 @@ const express = require("express");
 
 const {
   getRun,
-  addExchange
+  addExchange,
+  recordWalletCredentialReceipt
 } = require("../services/run.service");
 
 const {
   createWalletContinuation,
+  createPlaygroundCredentialOfferHandoff,
+  hasValidPlaygroundCredentialHandoffToken,
   createPresentationRequestContinuation
 } = require("../services/wallet.service");
 
@@ -44,15 +47,33 @@ router.get("/runs/:runId/continue", (req, res) => {
     });
   }
 
+  if (run.issuanceStatus === "STORED") {
+    return res.status(409).json({
+      success: false,
+      error: "The wallet has already stored a credential for this run",
+      errorCode: "CREDENTIAL_ALREADY_STORED"
+    });
+  }
+
   try {
-    const continuation = {
-      ...createWalletContinuation(
-        walletId,
-        credentialOfferUri
-      ),
-      handoffStatus: "PREPARED",
-      externalAction: "wallet-scan-not-observed"
-    };
+    const continuation = createWalletContinuation(
+      walletId,
+      credentialOfferUri
+    );
+
+    if (walletId === "inji-mobile") {
+      const handoff = createPlaygroundCredentialOfferHandoff(
+        run.runId,
+        credentialOfferUri,
+        process.env.PLAYGROUND_PUBLIC_URL
+      );
+      continuation.qrPayload = handoff.qrPayload;
+      continuation.handoffMethod = handoff.handoffMethod;
+      continuation.callbackExpiresAt = handoff.callbackExpiresAt;
+    }
+
+    continuation.handoffStatus = "PREPARED";
+    continuation.externalAction = "wallet-scan-not-observed";
 
     const durationMs = Date.now() - startTime;
 
@@ -80,6 +101,19 @@ router.get("/runs/:runId/continue", (req, res) => {
       exchange
     });
   } catch (error) {
+    if (
+      error.code === "PLAYGROUND_PUBLIC_URL_REQUIRED" ||
+      error.code === "PLAYGROUND_PUBLIC_URL_INVALID"
+    ) {
+      return res.status(error.statusCode || 503).json({
+        success: false,
+        error: error.message,
+        errorCode: error.code,
+        action:
+          "Configure PLAYGROUND_PUBLIC_URL with the HTTPS tunnel or deployment origin reachable by the phone, then prepare the handoff again"
+      });
+    }
+
     const durationMs = Date.now() - startTime;
 
     if (exchangeAttempted) {
@@ -124,6 +158,79 @@ router.get("/runs/:runId/continue", (req, res) => {
       errorCode: "WALLET_HANDOFF_PREPARATION_FAILED",
       diagnostic: exchange.diagnostic,
       exchange
+    });
+  }
+});
+
+router.post("/runs/:runId/issuance-outcome", (req, res) => {
+  const run = getRun(req.params.runId);
+  if (!run) {
+    return res.status(404).json({
+      success: false,
+      error: "Run not found",
+      errorCode: "RUN_NOT_FOUND"
+    });
+  }
+
+  const authorization = req.get("authorization") || "";
+  const callbackToken = authorization.startsWith("Bearer ")
+    ? authorization.slice("Bearer ".length)
+    : "";
+
+  if (
+    run.scenario?.wallet !== "inji-mobile" ||
+    !hasValidPlaygroundCredentialHandoffToken(
+      req.params.runId,
+      callbackToken
+    )
+  ) {
+    return res.status(401).json({
+      success: false,
+      error: "The wallet completion callback is not authorized",
+      errorCode: "INVALID_WALLET_CALLBACK"
+    });
+  }
+
+  const { status, credentialConfigurationId, format } = req.body || {};
+  if (status !== "STORED") {
+    return res.status(400).json({
+      success: false,
+      error: "Only a wallet-confirmed stored credential can complete this run step",
+      errorCode: "INVALID_WALLET_OUTCOME"
+    });
+  }
+
+  if (
+    typeof credentialConfigurationId !== "string" ||
+    credentialConfigurationId !== run.scenario.credential ||
+    typeof format !== "string" ||
+    (run.scenario.format && format !== run.scenario.format)
+  ) {
+    return res.status(409).json({
+      success: false,
+      error: "The wallet credential does not match this run's selected credential",
+      errorCode: "WALLET_CREDENTIAL_MISMATCH"
+    });
+  }
+
+  try {
+    const duplicate = Boolean(run.credentialReceipt);
+    const receipt = recordWalletCredentialReceipt(req.params.runId, {
+      credentialConfigurationId,
+      format
+    });
+
+    return res.status(200).json({
+      success: true,
+      duplicate,
+      issuanceStatus: "STORED",
+      credentialReceipt: receipt
+    });
+  } catch (error) {
+    return res.status(409).json({
+      success: false,
+      error: "The wallet credential receipt could not be recorded",
+      errorCode: "WALLET_RECEIPT_RECORDING_FAILED"
     });
   }
 });

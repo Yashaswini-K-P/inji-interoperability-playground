@@ -137,6 +137,15 @@ function createRunDiagnostics(run, readiness = {
     : hasValidVerificationFailure
       ? "FAIL"
       : null;
+  const verificationStatus =
+    run.verificationStatus ||
+    (verificationOutcome === "PASS"
+      ? "VERIFIED"
+      : verificationOutcome === "FAIL"
+        ? "REJECTED"
+        : presentationRequestPrepared
+          ? "PENDING"
+          : null);
   const walletInfo = readiness.wallet.adapter === "AVAILABLE"
     ? getWalletInfo(run.scenario?.wallet)
     : null;
@@ -158,19 +167,48 @@ function createRunDiagnostics(run, readiness = {
     });
   }
 
-  if (presentationRequestPrepared && !verificationOutcome) {
+  if (
+    presentationRequestPrepared &&
+    !verificationOutcome &&
+    ["PENDING", "SUBMITTED"].includes(verificationStatus)
+  ) {
     pendingExternalActions.push({
       action: "wallet-presentation-submission",
-      status: "PENDING",
+      status: verificationStatus,
       confirmation:
-        "The wallet must submit directly to Verify; the backend does not submit or proxy presentations"
+        verificationStatus === "SUBMITTED"
+          ? "Verify confirmed wallet submission; its authoritative verification result is still pending"
+          : "The wallet must submit directly to Verify; the backend does not submit or proxy presentations"
     });
   }
 
   const tokenExchange = latestExchange(run, "Token Request");
+  const credentialExchange = latestExchange(run, "Credential Request");
+  const credentialStatus = run.issuanceStatus === "STORED" ||
+    credentialExchange?.status === "SUCCESS"
+    ? "CONFIRMED"
+    : credentialExchange?.status === "PENDING"
+      ? "PENDING_EXTERNAL_ACTION"
+      : credentialExchange?.status === "FAILED"
+        ? "FAILED"
+        : credentialExchange?.status === "ERROR"
+          ? "ERROR"
+          : credentialExchange?.status === "UNSUPPORTED"
+            ? "UNSUPPORTED"
+            : "NOT_CONFIRMED";
+
+  if (credentialStatus === "PENDING_EXTERNAL_ACTION") {
+    pendingExternalActions.push({
+      action: "wallet-credential-proof",
+      status: "PENDING",
+      confirmation:
+        "The selected wallet must submit a signed OpenID4VCI proof JWT bound to the token response c_nonce"
+    });
+  }
 
   return {
     runId: run.runId,
+    verificationStatus,
     components: readiness,
     connectivity: {
       status: "NOT_CHECKED",
@@ -192,7 +230,7 @@ function createRunDiagnostics(run, readiness = {
             ? "FAILED"
             : "NOT_CONFIRMED",
       credentialRequest: credentialRequestCapability,
-      credential: "NOT_CONFIRMED"
+      credential: credentialStatus
     },
     pendingExternalActions,
     outcome: verificationOutcome
