@@ -94,6 +94,43 @@ test("keeps prepared wallet handoffs in progress and marks failed steps failed",
     JSON.parse(persistedRuns)[run.runId].status,
     "FAILED"
   );
+
+  runService.setRunPresentationRequest(
+    run.runId,
+    {
+      requestId: "req-live",
+      transactionId: "txn-live",
+      authorizationDetails: {
+        clientId: "did:web:verify.example",
+        responseType: "vp_token"
+      }
+    },
+    "did:web:verify.example"
+  );
+  runService.addExchange(run.runId, {
+    stepName: "Presentation Request Creation",
+    status: "SUCCESS",
+    requestId: "req-live",
+    transactionId: "txn-live"
+  });
+
+  const recoveredRun = runService.getRun(run.runId);
+  const persistedRun = JSON.parse(persistedRuns)[run.runId];
+  assert.equal(recoveredRun.status, "IN_PROGRESS");
+  assert.equal(recoveredRun.result, null);
+  assert.equal(recoveredRun.verificationResult, null);
+  assert.equal(recoveredRun.exchanges.length, 3);
+  assert.equal(recoveredRun.exchanges[1].status, "FAILED");
+  assert.equal(recoveredRun.exchanges[2].status, "SUCCESS");
+  assert.equal(recoveredRun.exchanges[2].requestId, "req-live");
+  assert.equal(recoveredRun.exchanges[2].transactionId, "txn-live");
+  assert.equal(persistedRun.status, "IN_PROGRESS");
+  assert.equal(persistedRun.presentationRequest.requestId, "req-live");
+  assert.equal(
+    persistedRun.presentationRequest.transactionId,
+    "txn-live"
+  );
+  assert.equal(persistedRun.exchanges[1].status, "FAILED");
 });
 
 test("stores only the authoritative verification summary and sets the terminal PASS state", () => {
@@ -129,9 +166,18 @@ test("stores only the authoritative verification summary and sets the terminal P
   assert.equal(resultRun.presentationRequest.requestId, "req-lifecycle");
   assert.equal(resultRun.status, "COMPLETED");
   assert.equal(resultRun.result, "PASS");
+  const persistedRun = JSON.parse(persistedRuns)[run.runId];
+  assert.equal(
+    persistedRun.presentationRequest.requestId,
+    "req-lifecycle"
+  );
+  assert.equal(
+    persistedRun.presentationRequest.transactionId,
+    "txn-lifecycle"
+  );
   assert.deepEqual(
     resultRun.verificationResult,
-    JSON.parse(persistedRuns)[run.runId].verificationResult
+    persistedRun.verificationResult
   );
 });
 

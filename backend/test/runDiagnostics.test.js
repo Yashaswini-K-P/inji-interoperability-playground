@@ -101,6 +101,14 @@ test("reports prepared wallet actions as pending and leaves outcomes unconfirmed
       "wallet-presentation-submission"
     ]
   );
+  assert.match(
+    diagnostics.pendingExternalActions[1].confirmation,
+    /wallet must submit directly to Verify/
+  );
+  assert.match(
+    diagnostics.pendingExternalActions[1].confirmation,
+    /backend does not submit or proxy presentations/
+  );
   assert.equal(
     JSON.stringify(diagnostics).includes("credential_offer_uri:redacted"),
     false

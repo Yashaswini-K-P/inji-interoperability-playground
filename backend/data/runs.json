@@ -340,5 +340,92 @@
     "presentationRequest": null,
     "verificationResult": null,
     "result": null
+  },
+  "RUN-8D11F6": {
+    "runId": "RUN-8D11F6",
+    "status": "FAILED",
+    "createdAt": "2026-10-11T11:02:53.085Z",
+    "scenario": {
+      "issuer": "inji-certify",
+      "credential": "FarmerCredential",
+      "format": "ldp_vc",
+      "issuanceFlow": "pre-authorized",
+      "wallet": "inji-mobile",
+      "verifier": "inji-verify",
+      "presentationProtocol": "openid4vp"
+    },
+    "exchanges": [
+      {
+        "stepName": "Presentation Request Creation",
+        "protocol": "openid4vp",
+        "direction": "playground-to-verifier",
+        "status": "FAILED",
+        "initiatedBy": "playground",
+        "durationMs": 1,
+        "error": "INJI_VERIFY_CLIENT_ID must be configured with the verifier client ID accepted by the selected wallet",
+        "diagnostic": {
+          "code": "VERIFIER_CLIENT_ID_NOT_CONFIGURED",
+          "upstreamStatus": null
+        },
+        "step": 1,
+        "timestamp": "2026-10-11T11:04:11.517Z",
+        "runId": "RUN-8D11F6",
+        "componentId": "inji-verify",
+        "protocolStep": "Presentation Request Creation"
+      },
+      {
+        "stepName": "Presentation Request Creation",
+        "protocol": "openid4vp",
+        "direction": "playground-to-verifier",
+        "status": "SUCCESS",
+        "initiatedBy": "playground",
+        "transactionId": "txn_520324ea-7f81-402a-87eb-ce904520d1a8",
+        "requestId": "req_4867604d-0f3f-4ef1-bb5f-20d8dfa77068",
+        "durationMs": 204,
+        "error": null,
+        "step": 2,
+        "timestamp": "2026-10-11T11:08:38.880Z",
+        "runId": "RUN-8D11F6",
+        "componentId": "inji-verify",
+        "protocolStep": "Presentation Request Creation"
+      }
+    ],
+    "offer": null,
+    "presentationRequest": {
+      "verifierId": "inji-verify",
+      "protocol": "openid4vp",
+      "createdAt": "2026-10-11T11:08:38.876Z",
+      "clientId": "client123",
+      "requestId": "req_4867604d-0f3f-4ef1-bb5f-20d8dfa77068",
+      "transactionId": "txn_520324ea-7f81-402a-87eb-ce904520d1a8",
+      "authorizationRequest": {
+        "transactionId": "txn_520324ea-7f81-402a-87eb-ce904520d1a8",
+        "requestId": "req_4867604d-0f3f-4ef1-bb5f-20d8dfa77068",
+        "authorizationDetails": {
+          "clientId": "client123",
+          "presentationDefinition": {
+            "id": "farmer-credential-request",
+            "input_descriptors": [
+              {
+                "id": "farmer-credential",
+                "format": {
+                  "ldp_vc": {}
+                }
+              }
+            ]
+          },
+          "nonce": "4dd4751d5229e7f8ed5a6b155730f44d",
+          "responseUri": "https://plug-slashed-backhand.ngrok-free.dev/v1/verify/vp-submission/direct-post",
+          "acceptVPWithoutHolderProof": false,
+          "responseCodeValidationRequired": false,
+          "responseType": "vp_token",
+          "responseMode": "direct_post",
+          "issuedAt": 1791716918802
+        },
+        "expiresAt": 1791717218801
+      }
+    },
+    "verificationResult": null,
+    "result": null
   }
 }

@@ -162,7 +162,8 @@ function createRunDiagnostics(run, readiness = {
     pendingExternalActions.push({
       action: "wallet-presentation-submission",
       status: "PENDING",
-      confirmation: "A wallet submission has not been confirmed by Verify"
+      confirmation:
+        "The wallet must submit directly to Verify; the backend does not submit or proxy presentations"
     });
   }
 

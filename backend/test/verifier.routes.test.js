@@ -37,6 +37,14 @@ const runServiceMock = {
       presentationRequest,
       clientId
     };
+    currentRun.presentationRequest = {
+      verifierId: currentRun.scenario.verifier,
+      protocol: currentRun.scenario.presentationProtocol,
+      clientId,
+      requestId: presentationRequest.requestId,
+      transactionId: presentationRequest.transactionId,
+      authorizationRequest: presentationRequest
+    };
   }
 };
 
@@ -54,10 +62,15 @@ const verifierServiceMock = {
   createPresentationRequest: async (verifierId, data) => {
     createRequestCalls.push({ verifierId, data });
     return {
-      requestId: "req-mocked",
+      requestId: "req-real-123",
+      transactionId: "txn-real-456",
       authorizationDetails: {
         clientId: data.clientId,
-        responseType: "vp_token"
+        responseType: "vp_token",
+        nonce: "nonce-from-verify",
+        responseMode: "direct_post",
+        responseUri: "https://verify.example/vp-submission/direct-post",
+        presentationDefinition: data.presentationDefinition
       }
     };
   }
@@ -196,6 +209,14 @@ test("uses and persists the configured client ID unchanged", async () => {
   assert.deepEqual(
     body.presentationRequest,
     savedRequest.presentationRequest
+  );
+  assert.equal(body.presentationRequest.requestId, "req-real-123");
+  assert.equal(body.presentationRequest.transactionId, "txn-real-456");
+  assert.equal(currentRun.presentationRequest.requestId, "req-real-123");
+  assert.equal(currentRun.presentationRequest.transactionId, "txn-real-456");
+  assert.deepEqual(
+    currentRun.presentationRequest.authorizationRequest,
+    body.presentationRequest
   );
   assert.equal(body.exchange.status, "SUCCESS");
 });

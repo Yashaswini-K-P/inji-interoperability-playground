@@ -10,7 +10,8 @@ const originalAxiosModule = require.cache[axiosPath];
 const axiosMock = {
   post: async () => ({
     data: {
-      requestId: "req-mocked"
+      requestId: "req-mocked",
+      transactionId: "txn-mocked"
     }
   })
 };
@@ -20,6 +21,19 @@ require.cache[axiosPath].exports = axiosMock;
 delete require.cache[adapterPath];
 const InjiVerifyAdapter = require(adapterPath);
 delete require.cache[adapterPath];
+
+const presentationDefinition = {
+  id: "definition",
+  input_descriptors: [{ id: "credential" }]
+};
+const presentationRequest = {
+  requestId: "req-actual",
+  transactionId: "txn-actual",
+  authorizationDetails: {
+    clientId: "did:web:verify.example",
+    responseType: "vp_token"
+  }
+};
 
 if (originalAxiosModule) {
   require.cache[axiosPath] = originalAxiosModule;
@@ -31,7 +45,7 @@ test("uses the configured client ID for the real verifier request", async () => 
   let capturedRequest;
   axiosMock.post = async (url, body) => {
     capturedRequest = { url, body };
-    return { data: { requestId: "req-mocked" } };
+    return { data: presentationRequest };
   };
   const adapter = new InjiVerifyAdapter({
     baseUrl: "http://verify.example",
@@ -40,7 +54,7 @@ test("uses the configured client ID for the real verifier request", async () => 
 
   const response = await adapter.createPresentationRequest({
     clientId: "did:web:verify.example",
-    presentationDefinition: { id: "definition" }
+    presentationDefinition
   });
 
   assert.equal(
@@ -53,9 +67,9 @@ test("uses the configured client ID for the real verifier request", async () => 
   );
   assert.deepEqual(capturedRequest.body, {
     clientId: "did:web:verify.example",
-    presentationDefinition: { id: "definition" }
+    presentationDefinition
   });
-  assert.deepEqual(response, { requestId: "req-mocked" });
+  assert.deepEqual(response, presentationRequest);
 });
 
 test("rejects an unconfigured verifier client ID without making a request", async () => {
@@ -69,7 +83,7 @@ test("rejects an unconfigured verifier client ID without making a request", asyn
 
   await assert.rejects(
     adapter.createPresentationRequest({
-      presentationDefinition: { id: "definition" }
+      presentationDefinition
     }),
     {
       code: "VERIFIER_CLIENT_ID_NOT_CONFIGURED",
@@ -92,7 +106,7 @@ test("rejects an invalid verifier URL without making a request", async () => {
   await assert.rejects(
     adapter.createPresentationRequest({
       clientId: "did:web:verify.example",
-      presentationDefinition: { id: "definition" }
+      presentationDefinition
     }),
     {
       code: "VERIFIER_URL_NOT_CONFIGURED",
@@ -106,7 +120,7 @@ test("normalizes trailing slashes on the explicitly configured Verify URL", asyn
   let capturedUrl;
   axiosMock.post = async (url) => {
     capturedUrl = url;
-    return { data: { requestId: "req-mocked" } };
+    return { data: presentationRequest };
   };
   const adapter = new InjiVerifyAdapter({
     baseUrl: "https://verify.example/",
@@ -115,12 +129,84 @@ test("normalizes trailing slashes on the explicitly configured Verify URL", asyn
 
   await adapter.createPresentationRequest({
     clientId: "did:web:verify.example",
-    presentationDefinition: { id: "definition" }
+    presentationDefinition
   });
 
   assert.equal(
     capturedUrl,
     "https://verify.example/v1/verify/vp-request"
+  );
+});
+
+test("rejects a malformed presentation definition without making a request", async () => {
+  let requestMade = false;
+  axiosMock.post = async () => {
+    requestMade = true;
+  };
+  const adapter = new InjiVerifyAdapter({
+    baseUrl: "http://verify.example",
+    clientId: "did:web:verify.example"
+  });
+
+  await assert.rejects(
+    adapter.createPresentationRequest({
+      clientId: "did:web:verify.example",
+      presentationDefinition: { id: "definition" }
+    }),
+    /presentationDefinition must include/
+  );
+  assert.equal(requestMade, false);
+});
+
+test("rejects malformed successful Verify responses without inventing request IDs", async () => {
+  const adapter = new InjiVerifyAdapter({
+    baseUrl: "http://verify.example",
+    clientId: "did:web:verify.example"
+  });
+
+  for (const data of [
+    null,
+    [],
+    { requestId: "req-only" },
+    { transactionId: "txn-only" },
+    { requestId: "", transactionId: "txn-actual" }
+  ]) {
+    axiosMock.post = async () => ({ data });
+
+    await assert.rejects(
+      adapter.createPresentationRequest({
+        clientId: "did:web:verify.example",
+        presentationDefinition
+      }),
+      {
+        code: "INVALID_VERIFIER_RESPONSE",
+        statusCode: 502
+      }
+    );
+  }
+});
+
+test("propagates Verify HTTP errors when creating a presentation request", async () => {
+  const adapter = new InjiVerifyAdapter({
+    baseUrl: "http://verify.example",
+    clientId: "did:web:verify.example"
+  });
+  const upstreamError = Object.assign(new Error("Verify rejected request"), {
+    response: {
+      status: 400,
+      data: { errorCode: "INVALID_PRESENTATION_DEFINITION" }
+    }
+  });
+  axiosMock.post = async () => {
+    throw upstreamError;
+  };
+
+  await assert.rejects(
+    adapter.createPresentationRequest({
+      clientId: "did:web:verify.example",
+      presentationDefinition
+    }),
+    (error) => error === upstreamError
   );
 });
 
@@ -147,7 +233,7 @@ test("retrieves the detailed Verify result by transaction ID without requesting 
 
   assert.equal(
     capturedRequest.url,
-    "http://verify.example/v2/vp-results/txn-123"
+    "http://verify.example/v1/verify/v2/vp-results/txn-123"
   );
   assert.deepEqual(capturedRequest.body, {
     skipStatusChecks: false,
@@ -156,6 +242,27 @@ test("retrieves the detailed Verify result by transaction ID without requesting 
   });
   assert.deepEqual(capturedRequest.config, { timeout: 15000 });
   assert.equal(result.allChecksSuccessful, true);
+});
+
+test("encodes transaction IDs when retrieving Verify results", async () => {
+  let capturedUrl;
+  axiosMock.post = async (url) => {
+    capturedUrl = url;
+    return { data: { transactionId: "txn/with spaces" } };
+  };
+  const adapter = new InjiVerifyAdapter({
+    baseUrl: "http://verify.example",
+    clientId: "did:web:verify.example"
+  });
+
+  await adapter.getPresentationResult({
+    transactionId: "txn/with spaces"
+  });
+
+  assert.equal(
+    capturedUrl,
+    "http://verify.example/v1/verify/v2/vp-results/txn%2Fwith%20spaces"
+  );
 });
 
 test("rejects an empty result transaction ID without making a request", async () => {

@@ -12,6 +12,9 @@ const walletServicePath = require.resolve(
 const routePath = require.resolve(
   "../src/routes/wallet.routes"
 );
+const InjiMobileAdapter = require(
+  "../src/adapters/wallets/injiMobile.adapter"
+);
 
 let currentRun;
 let exchanges;
@@ -123,6 +126,7 @@ function setRun(presentationRequest) {
 
 test("returns the unchanged verifier response and QR URI without recording it in the event", async () => {
   const verifierResponse = {
+    transactionId: "txn-route-test",
     requestId: "req-route-test",
     authorizationDetails: {
       clientId: "https://verify.example/rp",
@@ -133,11 +137,12 @@ test("returns the unchanged verifier response and QR URI without recording it in
       presentationDefinition: { id: "real-definition" }
     }
   };
-  const qrUri = "openid4vp://authorize?client_id=verify";
   setRun({
     verifierId: "inji-verify",
     protocol: "openid4vp",
     clientId: "https://verify.example/rp",
+    requestId: "req-route-test",
+    transactionId: "txn-route-test",
     authorizationRequest: verifierResponse
   });
   createPresentationRequestContinuation = (
@@ -148,17 +153,10 @@ test("returns the unchanged verifier response and QR URI without recording it in
     assert.equal(walletId, "inji-mobile");
     assert.equal(response, verifierResponse);
     assert.equal(clientId, "https://verify.example/rp");
-    return {
-      walletId,
-      wallet: "Inji Mobile Wallet",
-      protocol: "openid4vp",
-      handoffMethod: "cross-device-qr",
-      verifierResponse: response,
-      qrUri,
-      handoffStatus: "PREPARED",
-      externalAction: "wallet-scan-not-observed",
-      status: "PENDING_EXTERNAL_ACTION"
-    };
+    return new InjiMobileAdapter({
+      id: walletId,
+      name: "Inji Mobile Wallet"
+    }).createPresentationRequestContinuation(response, clientId);
   };
 
   const response = await fetch(
@@ -169,7 +167,20 @@ test("returns the unchanged verifier response and QR URI without recording it in
 
   assert.equal(response.status, 200);
   assert.deepEqual(body.wallet.verifierResponse, verifierResponse);
-  assert.equal(body.wallet.qrUri, qrUri);
+  assert.equal(body.wallet.qrUri.startsWith("openid4vp://authorize?"), true);
+  const qrParams = new URL(body.wallet.qrUri).searchParams;
+  assert.equal(qrParams.get("client_id"), "https://verify.example/rp");
+  assert.equal(qrParams.get("state"), "req-route-test");
+  assert.equal(qrParams.get("response_type"), "vp_token");
+  assert.equal(qrParams.get("response_mode"), "direct_post");
+  assert.equal(
+    qrParams.get("response_uri"),
+    "https://verify.example/response"
+  );
+  assert.deepEqual(
+    JSON.parse(qrParams.get("presentation_definition")),
+    verifierResponse.authorizationDetails.presentationDefinition
+  );
   assert.equal(body.wallet.handoffMethod, "cross-device-qr");
   assert.equal(body.wallet.status, "PENDING_EXTERNAL_ACTION");
   assert.equal(body.exchange.status, "PENDING_EXTERNAL_ACTION");
@@ -179,6 +190,16 @@ test("returns the unchanged verifier response and QR URI without recording it in
     "Authorization URI Generation"
   );
   assert.equal(body.exchange.initiatedBy, "playground");
+  assert.equal(body.exchange.requestId, "req-route-test");
+  assert.equal(body.exchange.transactionId, "txn-route-test");
+  assert.equal(
+    body.exchange.actionRequiredCode,
+    "SCAN_PRESENTATION_REQUEST_IN_INJI_MOBILE"
+  );
+  assert.equal(
+    body.exchange.actionRequired,
+    "Scan the presentation request with the selected wallet"
+  );
   assert.equal(
     body.exchange.externalAction,
     "wallet-scan-not-observed"

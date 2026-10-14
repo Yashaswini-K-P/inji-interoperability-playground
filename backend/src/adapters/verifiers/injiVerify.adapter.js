@@ -1,5 +1,38 @@
 const axios = require("axios");
 
+const VERIFY_API_PATH = "/v1/verify";
+
+function isPresentationDefinition(value) {
+  return Boolean(
+    value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    typeof value.id === "string" &&
+    value.id.trim() &&
+    Array.isArray(value.input_descriptors) &&
+    value.input_descriptors.length > 0 &&
+    value.input_descriptors.every((descriptor) =>
+      descriptor &&
+      typeof descriptor === "object" &&
+      !Array.isArray(descriptor) &&
+      typeof descriptor.id === "string" &&
+      descriptor.id.trim()
+    )
+  );
+}
+
+function isValidPresentationRequestResponse(response) {
+  return Boolean(
+    response &&
+    typeof response === "object" &&
+    !Array.isArray(response) &&
+    typeof response.requestId === "string" &&
+    response.requestId.trim() &&
+    typeof response.transactionId === "string" &&
+    response.transactionId.trim()
+  );
+}
+
 class InjiVerifyAdapter {
   constructor(config) {
     this.config = config;
@@ -54,8 +87,10 @@ class InjiVerifyAdapter {
     clientId,
     presentationDefinition
   }) {
-    if (!presentationDefinition) {
-      throw new Error("presentationDefinition is required");
+    if (!isPresentationDefinition(presentationDefinition)) {
+      throw new Error(
+        "presentationDefinition must include an id and non-empty input_descriptors with IDs"
+      );
     }
 
     const configuredClientId =
@@ -77,12 +112,21 @@ class InjiVerifyAdapter {
     }
 
     const url =
-      `${this.getBaseUrl()}/v1/verify/vp-request`;
+      `${this.getBaseUrl()}${VERIFY_API_PATH}/vp-request`;
 
     const response = await axios.post(url, {
       clientId: configuredClientId,
       presentationDefinition
     });
+
+    if (!isValidPresentationRequestResponse(response?.data)) {
+      const error = new Error(
+        "Inji Verify returned a malformed presentation request response"
+      );
+      error.code = "INVALID_VERIFIER_RESPONSE";
+      error.statusCode = 502;
+      throw error;
+    }
 
     return response.data;
   }
@@ -96,7 +140,7 @@ class InjiVerifyAdapter {
     }
 
     const url =
-      `${this.getBaseUrl()}/v2/vp-results/${encodeURIComponent(transactionId)}`;
+      `${this.getBaseUrl()}${VERIFY_API_PATH}/v2/vp-results/${encodeURIComponent(transactionId)}`;
     const response = await axios.post(
       url,
       {

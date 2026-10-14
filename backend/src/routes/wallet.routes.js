@@ -189,6 +189,10 @@ router.post("/runs/:runId/presentation", (req, res) => {
         externalAction: "wallet-scan-not-observed",
         handoffStatus: "PREPARED",
         handoffMethod: continuation.handoffMethod,
+        transactionId: run.presentationRequest.transactionId || null,
+        requestId: run.presentationRequest.requestId || null,
+        actionRequiredCode: "SCAN_PRESENTATION_REQUEST_IN_INJI_MOBILE",
+        actionRequired: "Scan the presentation request with the selected wallet",
         durationMs,
         error: null
       }

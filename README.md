@@ -89,14 +89,14 @@ The handoff endpoint takes no request body and returns this shape
     "handoffMethod": "cross-device-qr",
     "verifierResponse": "<unchanged Inji Verify response>",
     "qrUri": "openid4vp://authorize?<encoded authorization-request parameters>",
-    "status": "READY"
+    "status": "PENDING_EXTERNAL_ACTION"
   },
   "exchange": {
     "step": 2,
     "timestamp": "<ISO 8601 timestamp>",
     "stepName": "Authorization URI Generation",
     "protocol": "openid4vp",
-    "status": "READY",
+    "status": "PENDING_EXTERNAL_ACTION",
     "direction": "playground-to-wallet",
     "initiatedBy": "playground",
     "externalAction": "wallet-scan-not-observed",
@@ -109,24 +109,30 @@ The handoff endpoint takes no request body and returns this shape
 
 For by-value responses, `qrUri` contains the authorization parameters
 from `authorizationDetails`, including `state` correlated with
-`requestId`; `client_metadata` is included only when supplied by Verify.
+`requestId`. When Verify omits optional `client_metadata`, the Playground
+uses the same wallet format metadata as Verify 0.18.2's QR component.
 For by-reference responses, it contains the configured `client_id` and
 the verifier-provided `request_uri`; the wallet resolves the request
 URI. The playground does not create request JWTs.
+
+The handoff exchange records the Verify request and transaction IDs but not
+the QR payload, nonce, or presentation definition. A successful new Verify
+request puts the run back in `IN_PROGRESS` while preserving earlier failed
+exchanges.
 
 It returns `404` for an unknown run, `409` if no presentation request
 has been created yet, and `502` when the selected wallet cannot prepare
 the handoff. Failed preparations are recorded as `FAILED` exchanges.
 
-The authorization-URI step is recorded as `READY` when the QR URI is
-prepared and `FAILED` if preparation fails. Loopback addresses such as
+The authorization-URI step is recorded as `PENDING_EXTERNAL_ACTION` when the
+QR URI is prepared and `FAILED` if preparation fails. Loopback addresses such as
 `localhost` and Docker-only host addresses are rejected because they
 cannot be reached by a separate mobile device. Neither status means
 that the wallet was opened, a presentation was submitted, or
 verification completed. Runs remain `IN_PROGRESS` until a supported
 result is retrieved. The Playground's
 `GET /api/verify/runs/:runId/result` calls Inji Verify's
-`POST /v2/vp-results/{transactionId}` using the transaction ID and
+`POST /v1/verify/v2/vp-results/{transactionId}` using the transaction ID and
 request ID returned when the verifier request was created. Verify stores
 the wallet submission against the OpenID4VP `state`/request ID; its
 result endpoint resolves the transaction's request and performs VP/VC

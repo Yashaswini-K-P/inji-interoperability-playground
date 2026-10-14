@@ -26,7 +26,11 @@ the wallet to trust that callback according to its deployment policy.
 
 - The component registry exposes Inji Certify, Inji Mobile for Android/iOS,
   Inji Web, and Inji Verify. The backend package does not pin or embed an Inji
-  Mobile SDK/app version.
+  Mobile SDK/app version. The local Inji Wallet checkout is `v0.22.1`
+  (`2b37c058a9ae10216e099dce78fbda57069d41ef`); it calls
+  `requestCredentialByOffer` in the app and delegates offer processing,
+  token/proof callbacks, and credential receipt to its native VCI client
+  (`io.inji:inji-vci-client-aar:0.7.0` on Android).
 - Certify metadata/credential discovery, pre-authorized offer creation and
   retrieval, and the pre-authorized token exchange are implemented. A
   successful offer or token exchange is not evidence that a credential was
@@ -45,7 +49,32 @@ the wallet to trust that callback according to its deployment policy.
 - `POST /api/wallet/runs/:runId/presentation` prepares an OpenID4VP QR
   handoff. The exchange remains `PENDING_EXTERNAL_ACTION` until the selected
   wallet submits a presentation and Verify reports an authoritative result.
-  A prepared request/QR alone is not a submitted presentation or PASS/FAIL.
+  The returned `wallet.qrUri` follows Verify 0.18.2's `openid4vp://authorize`
+  QR format; the exchange records its request and transaction IDs but not the
+  QR payload. A prepared request/QR alone is not a submitted presentation or
+  PASS/FAIL.
+- The checked-out Inji Wallet handles credential offers by scanning the QR
+  inside the app; its Android URL filters register `openid4vp://authorize`
+  and the OAuth redirect scheme, not an OpenID4VCI credential-offer deep link.
+  The backend therefore cannot launch issuance directly in the wallet or
+  receive a native credential callback. Completing that integration requires
+  a wallet-owned app-link/callback contract that hands the offer to the
+  existing native VCI client and returns only a correlated, non-sensitive
+  completion signal; proof generation and credential contents must remain
+  within the wallet.
+- Inji Verify `v0.18.2` mounts its API at `/v1/verify`. The backend creates
+  requests at `/v1/verify/vp-request` and retrieves detailed results from the
+  source-confirmed `POST /v1/verify/v2/vp-results/:transactionId` route with
+  `includeClaims: false`. Verify's cross-device wallet submission endpoint is
+  `/v1/verify/vp-submission/direct-post`; it is called by the wallet, not by
+  this backend. The backend does not accept or proxy presentation tokens.
+- `POST /api/verify/runs/:runId/request` sends the configured
+  `INJI_VERIFY_CLIENT_ID` and a Presentation Exchange definition to Verify.
+  On success, the Verify response (including its actual `requestId` and
+  `transactionId`) is persisted on the run and returned by the API. The
+  `GET /api/verify/runs/:runId/result` endpoint retrieves results using that
+  stored transaction ID: it reports pending/unavailable states without
+  inventing a result, and records PASS/FAIL only from a valid Verify result.
 - `GET /api/runs/:runId/diagnostics` distinguishes prepared actions, pending
   external actions, unsupported credential requests, and authoritative
   verification outcomes. Diagnostics do not probe external connectivity or
@@ -53,8 +82,8 @@ the wallet to trust that callback according to its deployment policy.
 
 Authorization-code issuance, native Inji Mobile credential request/proof and
 receipt, and end-to-end wallet presentation submission are not implemented.
-The Android/iOS platforms in the component registry describe the wallet
-targets, not a backend connection to a running app. Configure
+The registered Android/iOS platforms describe wallet targets, not a backend
+connection to a running app. Configure
 `INJI_VERIFY_CLIENT_ID` from the real deployment before attempting Verify
 flows. Diagnostics are not connectivity checks; `GET /api/health` only
 confirms the backend process is running.

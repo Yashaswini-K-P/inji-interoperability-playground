@@ -1,4 +1,18 @@
 const DEFAULT_PROTOCOL = "openid4vp://";
+// Match Verify 0.18.2's QR component when its API omits optional metadata.
+const VERIFY_SDK_VP_FORMATS = {
+  ldp_vp: {
+    proof_type: [
+      "Ed25519Signature2018",
+      "Ed25519Signature2020",
+      "RsaSignature2018"
+    ]
+  },
+  "vc+sd-jwt": {
+    "sd-jwt_alg_values": ["RS256", "ES256", "ES256K", "EdDSA"],
+    "kb-jwt_alg_values": ["RS256", "ES256", "ES256K", "EdDSA"]
+  }
+};
 
 function requireString(value, fieldName) {
   if (typeof value !== "string" || !value.trim()) {
@@ -188,24 +202,27 @@ function createAuthorizationRequestUri(
     }
 
     const clientMetadata =
-      authorizationDetails.clientMetadata;
+      authorizationDetails.clientMetadata === undefined
+        ? {
+          client_name: clientId,
+          vp_formats: VERIFY_SDK_VP_FORMATS
+        }
+        : authorizationDetails.clientMetadata;
 
-    if (clientMetadata !== undefined) {
-      if (
-        !clientMetadata ||
-        typeof clientMetadata !== "object" ||
-        Array.isArray(clientMetadata)
-      ) {
-        throw new Error(
-          "authorizationDetails.clientMetadata must be an object"
-        );
-      }
-
-      params.set(
-        "client_metadata",
-        JSON.stringify(clientMetadata)
+    if (
+      !clientMetadata ||
+      typeof clientMetadata !== "object" ||
+      Array.isArray(clientMetadata)
+    ) {
+      throw new Error(
+        "authorizationDetails.clientMetadata must be an object"
       );
     }
+
+    params.set(
+      "client_metadata",
+      JSON.stringify(clientMetadata)
+    );
   }
 
   return `${DEFAULT_PROTOCOL}authorize?${params.toString()}`;

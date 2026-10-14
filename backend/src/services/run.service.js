@@ -348,6 +348,10 @@ function setRunPresentationRequest(
   }
 
   const updatedRun = cloneRun(run);
+  updatedRun.status = "IN_PROGRESS";
+  updatedRun.result = null;
+  updatedRun.verificationResult = null;
+  updatedRun.verificationFailure = null;
   updatedRun.presentationRequest = {
     verifierId: run.scenario.verifier,
     protocol: run.scenario.presentationProtocol || "openid4vp",

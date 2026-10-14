@@ -54,10 +54,25 @@ test("builds an OpenID4VP QR URI from a by-value response", () => {
     JSON.parse(params.get("presentation_definition")),
     presentationDefinition
   );
-  assert.equal(params.has("client_metadata"), false);
+  assert.deepEqual(JSON.parse(params.get("client_metadata")), {
+    client_name: clientId,
+    vp_formats: {
+      ldp_vp: {
+        proof_type: [
+          "Ed25519Signature2018",
+          "Ed25519Signature2020",
+          "RsaSignature2018"
+        ]
+      },
+      "vc+sd-jwt": {
+        "sd-jwt_alg_values": ["RS256", "ES256", "ES256K", "EdDSA"],
+        "kb-jwt_alg_values": ["RS256", "ES256", "ES256K", "EdDSA"]
+      }
+    }
+  });
 });
 
-test("preserves verifier-supplied client metadata without synthesizing it", () => {
+test("preserves verifier-supplied client metadata", () => {
   const clientMetadata = {
     client_name: "Actual Verify instance",
     vp_formats: { "vc+sd-jwt": { alg: ["ES256"] } }
@@ -82,6 +97,26 @@ test("preserves verifier-supplied client metadata without synthesizing it", () =
   assert.deepEqual(
     JSON.parse(params.get("client_metadata")),
     clientMetadata
+  );
+});
+
+test("rejects malformed verifier-supplied client metadata", () => {
+  const verifierResponse = {
+    requestId: "req-malformed-metadata",
+    authorizationDetails: {
+      clientId,
+      responseType: "vp_token",
+      responseMode: "direct_post",
+      nonce: "nonce",
+      responseUri: "https://verify.example/response",
+      presentationDefinition,
+      clientMetadata: []
+    }
+  };
+
+  assert.throws(
+    () => createAuthorizationRequestUri(verifierResponse, clientId),
+    /authorizationDetails.clientMetadata must be an object/
   );
 });
 
